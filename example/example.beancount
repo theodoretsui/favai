@@ -1,0 +1,72 @@
+option "title" "favai Example"
+option "operating_currency" "CNY"
+
+2026-01-01 custom "fava-extension" "favai" "{'api': 'openai-completions', 'base_url': 'https://api.deepseek.com', 'model': 'deepseek-v4-flash', 'api_key': '$DEEPSEEK_TOKEN', 'vision': False, 'context_window': 256000, 'max_tokens': 16384}"
+
+* Assets
+2026-01-01 open Assets:CN:Alipay
+2026-01-01 open Assets:CN:WeChat
+2026-01-01 open Assets:CN:Bank:Checking
+
+* Liabilities
+2026-01-01 open Liabilities:CreditCard:CN
+
+* Income
+2026-01-01 open Income:CN:Salary
+
+* Expenses
+2026-01-01 open Expenses:Food:Restaurant
+2026-01-01 open Expenses:Food:Delivery
+2026-01-01 open Expenses:Transport:Metro
+2026-01-01 open Expenses:Transport:Taxi
+2026-01-01 open Expenses:Transport:Gas
+2026-01-01 open Expenses:Shopping
+2026-01-01 open Expenses:Entertainment
+2026-01-01 open Expenses:Utilities:Electricity
+2026-01-01 open Expenses:Utilities:Water
+2026-01-01 open Expenses:Utilities:Internet
+2026-01-01 open Expenses:Health:Medicine
+2026-01-01 open Expenses:Education
+2026-01-01 open Expenses:Housing:Rent
+2026-01-01 open Expenses:Communication
+2026-01-01 open Expenses:Test
+
+2026-07-01 * "公司" "6月工资"
+  Income:CN:Salary                          -15000.00 CNY
+  Assets:CN:Bank:Checking
+
+2026-07-03 * "盒马鲜生" "食材和日用品"
+  Expenses:Food:Delivery                      328.50 CNY
+  Assets:CN:Alipay
+
+2026-07-05 * "滴滴出行" "加班打车"
+  Expenses:Transport:Taxi                      35.00 CNY
+  Assets:CN:WeChat
+
+2026-07-08 * "国家电网" "7月电费"
+  Expenses:Utilities:Electricity              186.72 CNY
+  Assets:CN:Alipay
+
+2026-07-10 * "美团外卖" "午餐"
+  Expenses:Food:Delivery                       42.00 CNY
+  Assets:CN:Alipay
+
+2026-07-12 * "星巴克" "咖啡"
+  Expenses:Food:Restaurant                     38.00 CNY
+  Assets:CN:WeChat
+
+2026-07-15 * "京东" "图书"
+  Expenses:Education                          129.00 CNY
+  Assets:CN:Alipay
+
+2026-07-18 * "中国移动" "话费"
+  Expenses:Communication                       50.00 CNY
+  Assets:CN:Alipay
+
+2026-07-20 * "海底捞" "朋友聚餐"
+  Expenses:Food:Restaurant                    358.00 CNY
+  Assets:CN:Alipay
+
+2026-07-22 * "支付宝" "爱心捐赠"
+  Expenses:Shopping                            66.80 CNY
+  Assets:CN:Alipay
