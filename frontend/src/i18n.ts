@@ -1,0 +1,218 @@
+/**
+ * Tiny i18n: two dictionaries + t(). zh-CN is the default; anything whose
+ * navigator.language starts with something else falls back to English only
+ * when it does not start with "zh".
+ */
+
+const zhCN = {
+  "chat.title": "FavAI",
+  "chat.attach": "添加附件",
+  "chat.attach.hint": "支持 .txt / .md / .csv / .json / 图片，可多选",
+  "chat.placeholder": "拖拽账单文件到此处，或直接输入消息…",
+  "chat.input.placeholder": "输入消息，或粘贴账单文本…",
+
+  "import.dropzone.title": "拖拽账单文件到这里，或点击选择",
+  "import.dropzone.hint": "支持 .txt / .md / .csv / .json / 图片 / .pdf，可多选",
+  "import.files.selected": "已选择 {count} 个文件",
+  "import.files.remove": "移除",
+  "import.paste.label": "或直接粘贴账单文本",
+  "import.paste.placeholder": "把银行账单、支付记录等文本粘贴到这里…",
+  "import.start": "开始导入",
+  "import.start.empty": "请先选择文件或粘贴文本",
+  "import.not.configured": "尚未配置 LLM API，请点击右上角齿轮图标完成配置。",
+
+  "unified.import.title": "导入账单",
+  "unified.import.desc": "粘贴或上传账单文件，AI 自动提取交易并生成 Beancount 分录",
+  "unified.chat.title": "账本问答",
+  "unified.chat.desc": "用自然语言查询账本，AI 自动执行 BQL 查询并分析结果",
+  "unified.welcome": "选择一种方式开始",
+  "unified.callout.configured": "已连接 LLM，开始使用吧",
+  "unified.callout.not_configured": "尚未配置 LLM API — 请点击右上角齿轮图标完成配置后再使用",
+
+  "chat.extracting": "提取中…",
+  "chat.you": "你",
+  "chat.assistant": "助手",
+  "chat.feedback.placeholder": "输入修改意见，例如「把这笔改成餐饮」…",
+  "chat.send": "发送",
+  "chat.initial.user": "开始导入：{summary}",
+  "chat.thinking": "思考中…",
+  "chat.reasoning": "思考过程",
+  "chat.processing": "正在处理附件…",
+  "chat.tool.calling": "正在调用",
+  "chat.parsed.content": "查看附件解析内容",
+  "chat.tool.cancelled": "已取消",
+  "chat.tool.result": "返回结果",
+  "chat.not.configured": "请先完成 LLM API 配置。",
+
+  "proposal.title": "提案预览",
+  "proposal.empty": "暂无提案，等待 LLM 提取结果。",
+  "proposal.new.available": "LLM 给出了新提案",
+  "proposal.new.apply": "覆盖当前修改",
+  "proposal.new.keep": "保留我的修改",
+  "proposal.date": "日期",
+  "proposal.payee": "收款方",
+  "proposal.narration": "摘要",
+  "proposal.account": "账户",
+  "proposal.amount": "金额",
+  "proposal.currency": "货币",
+  "proposal.posting.add": "添加分录",
+  "proposal.posting.remove": "删除该行",
+  "proposal.transaction.remove": "删除此交易",
+  "proposal.dirty.badge": "已手动修改",
+
+  "account.search.placeholder": "搜索或输入新账户…",
+  "account.empty": "没有匹配的账户",
+
+  "confirm.submit": "确认写入",
+  "confirm.success": "已写入 {count} 条交易",
+  "discard.submit": "放弃",
+  "discard.done": "已放弃本次导入",
+
+  "settings.title": "设置",
+  "settings.status.title": "配置状态",
+  "settings.status.configured": "已配置",
+  "settings.status.not.configured": "未配置",
+  "settings.api": "API 类型",
+  "settings.api.openai": "OpenAI 兼容",
+  "settings.api.anthropic": "Anthropic 兼容",
+  "settings.base_url": "Base URL",
+  "settings.model": "模型",
+  "settings.api_key": "API Key",
+  "settings.api_key.placeholder": "支持 $ENV_VAR 环境变量引用",
+  "settings.api_key.keep": "当前已保存密钥，留空表示不修改",
+  "settings.vision": "模型支持图片输入（vision）",
+  "settings.context_window": "上下文窗口（tokens）",
+  "settings.max_tokens": "最大输出 tokens",
+  "settings.save": "保存",
+  "settings.saved": "设置已保存",
+  "settings.loading": "加载中…",
+
+  "error.generic": "操作失败：{message}",
+  "warning.title": "警告",
+  "warning.vision.disabled.images_ignored":
+    "当前模型未启用 vision，已忽略 {count} 张图片，将仅使用 OCR/文本内容。",
+
+  "import.validation.currencyUnspecified": "未指定币种",
+  "import.validation.dateInvalid": "第 {index} 笔交易的日期格式无效：{date}",
+  "import.validation.postingsTooFew": "第 {index} 笔交易至少需要两条分录",
+  "import.validation.accountEmpty": "第 {index} 笔交易的分录缺少账户",
+  "import.validation.accountInvalid": "第 {index} 笔交易使用了不存在的账户：{account}",
+  "import.validation.amountFormatInvalid": "第 {index} 笔交易的金额格式无效：{amount}",
+  "import.validation.multipleUnspecified": "第 {index} 笔交易有多条分录缺少金额",
+  "import.validation.unbalanced": "第 {index} 笔交易金额不平衡（{currency} 差额 {difference}）",
+} as const;
+
+export type I18nKey = keyof typeof zhCN;
+
+const en: Record<I18nKey, string> = {
+  "chat.title": "FavAI",
+  "chat.attach": "Attach files",
+  "chat.attach.hint": "Supports .txt / .md / .csv / .json / images, multiple files",
+  "chat.placeholder": "Drop statement files here, or type a message…",
+  "chat.input.placeholder": "Type a message, or paste statement text…",
+
+  "import.dropzone.title": "Drag & drop statement files here, or click to browse",
+  "import.dropzone.hint": "Supports .txt / .md / .csv / .json / images / .pdf, multiple files",
+  "import.files.selected": "{count} file(s) selected",
+  "import.files.remove": "Remove",
+  "import.paste.label": "…or paste statement text",
+  "import.paste.placeholder": "Paste bank statements, payment records, etc.…",
+  "import.start": "Start import",
+  "import.start.empty": "Select files or paste text first",
+  "import.not.configured": "LLM API is not configured. Click the gear icon to configure.",
+
+  "unified.import.title": "Import Bill",
+  "unified.import.desc": "Paste or upload a bill; AI extracts transactions and generates Beancount entries",
+  "unified.chat.title": "Ledger Chat",
+  "unified.chat.desc": "Ask questions in natural language; AI executes BQL queries and analyzes results",
+  "unified.welcome": "Choose how to start",
+  "unified.callout.configured": "LLM connected — ready to go",
+  "unified.callout.not_configured": "LLM API not configured — click the gear icon to configure",
+
+  "chat.extracting": "Extracting…",
+  "chat.you": "You",
+  "chat.assistant": "Assistant",
+  "chat.feedback.placeholder": "Give feedback, e.g. \"change this one to Dining\"…",
+  "chat.send": "Send",
+  "chat.initial.user": "Start import: {summary}",
+  "chat.thinking": "Thinking…",
+  "chat.reasoning": "Reasoning",
+  "chat.processing": "Processing attachments…",
+  "chat.tool.calling": "Calling",
+  "chat.parsed.content": "View parsed content",
+  "chat.tool.cancelled": "Cancelled",
+  "chat.tool.result": "Result from",
+  "chat.not.configured": "Please configure the LLM API first.",
+
+  "proposal.title": "Proposal preview",
+  "proposal.empty": "No proposal yet — waiting for the LLM to extract transactions.",
+  "proposal.new.available": "The LLM produced a new proposal",
+  "proposal.new.apply": "Overwrite my edits",
+  "proposal.new.keep": "Keep my edits",
+  "proposal.date": "Date",
+  "proposal.payee": "Payee",
+  "proposal.narration": "Narration",
+  "proposal.account": "Account",
+  "proposal.amount": "Amount",
+  "proposal.currency": "Currency",
+  "proposal.posting.add": "Add posting",
+  "proposal.posting.remove": "Remove row",
+  "proposal.transaction.remove": "Delete transaction",
+  "proposal.dirty.badge": "Edited",
+
+  "account.search.placeholder": "Search or type a new account…",
+  "account.empty": "No matching account",
+
+  "confirm.submit": "Confirm & write",
+  "confirm.success": "Inserted {count} transaction(s)",
+  "discard.submit": "Discard",
+  "discard.done": "Import discarded",
+
+  "settings.title": "Settings",
+  "settings.status.title": "Configuration status",
+  "settings.status.configured": "Configured",
+  "settings.status.not.configured": "Not configured",
+  "settings.api": "API type",
+  "settings.api.openai": "OpenAI compatible",
+  "settings.api.anthropic": "Anthropic compatible",
+  "settings.base_url": "Base URL",
+  "settings.model": "Model",
+  "settings.api_key": "API Key",
+  "settings.api_key.placeholder": "Supports $ENV_VAR environment variable references",
+  "settings.api_key.keep": "A key is stored; leave empty to keep it",
+  "settings.vision": "Model accepts image input (vision)",
+  "settings.context_window": "Context window (tokens)",
+  "settings.max_tokens": "Max output tokens",
+  "settings.save": "Save",
+  "settings.saved": "Settings saved",
+  "settings.loading": "Loading…",
+
+  "error.generic": "Operation failed: {message}",
+  "warning.title": "Warning",
+  "warning.vision.disabled.images_ignored":
+    "Vision is disabled for the current model; {count} image(s) ignored, using text/OCR content only.",
+
+  "import.validation.currencyUnspecified": "unspecified currency",
+  "import.validation.dateInvalid": "Transaction {index} has an invalid date: {date}",
+  "import.validation.postingsTooFew": "Transaction {index} needs at least two postings",
+  "import.validation.accountEmpty": "Transaction {index} has a posting without an account",
+  "import.validation.accountInvalid": "Transaction {index} uses a non-existent account: {account}",
+  "import.validation.amountFormatInvalid": "Transaction {index} has an invalid amount: {amount}",
+  "import.validation.multipleUnspecified": "Transaction {index} has multiple postings without amounts",
+  "import.validation.unbalanced": "Transaction {index} is unbalanced ({currency} difference: {difference})",
+};
+
+const dict: Record<I18nKey, string> =
+  typeof navigator !== "undefined" && navigator.language.startsWith("zh")
+    ? zhCN
+    : en;
+
+export function t(key: I18nKey, vars?: Record<string, string | number>): string {
+  let text = dict[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
