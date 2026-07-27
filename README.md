@@ -8,6 +8,7 @@ AI-powered bill import and ledger analysis extension for [Fava](https://github.c
 - **Chat with your ledger** — ask questions in natural language using BQL queries ("What was my food spend this month?")
 - **Multi-turn editing** — give feedback to refine the proposed transactions before writing
 - **Any LLM provider** — OpenAI-compatible or Anthropic-compatible APIs (supports custom endpoints and `$ENV_VAR` API keys)
+- **OCR fallback** — PaddleOCR extracts text from bill images for non-vision models (optional)
 
 ## How it works
 
@@ -15,7 +16,7 @@ favai runs the agent loop **directly in your browser** using [pi-agent-core](htt
 
 ```
 Browser (FavaAI.js)
-  ├── pi-agent-core Agent (per-tab: import / chat)
+  ├── pi-agent-core Agent (unified: import + chat)
   ├── pi-ai provider → favai llm_proxy → your LLM API
   ├── propose_transactions tool (import) — updates proposal table
   ├── bql_query tool (chat) — queries fava's built-in BQL API
@@ -32,18 +33,22 @@ favai backend (Flask, stateless)
 
 ### Prerequisites
 
-- Python ≥ 3.14
-- Fava ≥ 1.30.14
+- Python >= 3.13
+- Fava >= 1.30.14
 - An LLM API key (OpenAI, Anthropic, or any compatible endpoint)
 
-### Setup
+### Install from source
 
 ```bash
-# Install with uv
-uv pip install favai
+# Clone the repo
+git clone https://github.com/your-org/favai.git
+cd favai
 
-# Or using pip with the source
-pip install favai
+# Install Python dependencies
+uv sync
+
+# Build the frontend
+cd frontend && npm install && npm run build && cd ..
 ```
 
 ### Configure Fava
@@ -56,19 +61,18 @@ Add the extension to your Beancount file:
 
 The extension page will appear at `/<your-ledger>/extension/FavaAI/`.
 
-### Build the frontend (development only)
+### Optional: OCR support
 
 ```bash
-cd frontend
-npm install
-npm run build   # builds src/favai/FavaAI.js
+pip install favai[ocr]
+# or: uv sync --extra ocr
 ```
 
 ## Usage
 
 ### 1. Configure an LLM provider
 
-Open the **Settings** tab and enter:
+Click the gear icon (top-right) and enter:
 - API type: `OpenAI Compatible` or `Anthropic Compatible`
 - Base URL: your endpoint (e.g. `https://api.openai.com/v1` or a custom proxy)
 - Model: the model identifier (e.g. `gpt-4o`, `claude-sonnet-4-6`)
@@ -76,7 +80,7 @@ Open the **Settings** tab and enter:
 
 ### 2. Import bills
 
-Switch to the **Import** tab, paste text or upload files (`.txt`, `.csv`, `.png`, `.jpg`, `.pdf`, etc.), and click **Start import**. The LLM agent extracts transactions and presents them in an editable table. You can:
+In the chat interface, paste text or upload files (`.txt`, `.csv`, `.png`, `.jpg`, `.pdf`, etc.) and press Enter. The LLM agent extracts transactions and presents them in an editable table. You can:
 
 - Edit cells directly in the table
 - Send natural-language feedback ("change this one to Dining")
@@ -84,7 +88,7 @@ Switch to the **Import** tab, paste text or upload files (`.txt`, `.csv`, `.png`
 
 ### 3. Chat with your ledger
 
-Switch to the **Chat** tab and ask questions like:
+Type questions like:
 - "What was my food spend last month?"
 - "Show me all transactions to Alipay in July"
 - "How much did I spend on utilities this year?"

@@ -16,12 +16,14 @@ that injects the real API key.
 - Import bills via text paste, screenshots (PNG/JPEG/WebP) or PDFs
 - Multi-turn conversation to refine proposed transactions
 - Chat agent with BQL query tool for ledger analysis
+- OCR (PaddleOCR) fallback for image text extraction
 - Configurable for any OpenAI-compatible or Anthropic-compatible provider
 
-**Language:** Python 3.14+ / TypeScript (frontend + pi-agent-core tools)  
+**Language:** Python 3.13+ / TypeScript (frontend + pi-agent-core tools)  
 **License:** Not specified (check `pyproject.toml`)
 
 ---
+
 
 ## Directory Layout
 
@@ -30,7 +32,7 @@ favai/
 ├── pyproject.toml           # Python project metadata, dependencies, build config (hatchling)
 ├── Makefile                 # Common dev commands (deps, test, lint, build, dev, run)
 ├── uv.lock                  # uv lockfile (deterministic Python dependency resolution)
-├── .python-version          # Python version pin (3.14)
+├── .python-version          # Python version pin (3.13)
 ├── .gitignore               # Python build artifacts, .venv, frontend node_modules, .favai/
 │
 ├── src/favai/               # Python extension package (installed by pip/uv)
@@ -39,6 +41,7 @@ favai/
 │   ├── entries.py           # Transaction dict → fava deserialisation shape conversion
 │   ├── ingest.py            # File upload processing (text, images, PDF text extraction)
 │   ├── proxy.py             # LLM request forwarder (injects API key, streams bytes)
+│   ├── ocr.py               # PaddleOCR integration (lazy-loaded, thread-safe, onnxruntime)
 │   ├── FavaAI.js            # Frontend build artifact (committed in git, ~1.5 MB minified)
 │   ├── templates/
 │   │   └── FavaAI.html      # fava extension page mount point (<div id="favaiApp">)
@@ -51,30 +54,38 @@ favai/
 │   ├── components.json      # shadcn/ui configuration
 │   └── src/
 │       ├── extension.ts     # Entry point: fava's onExtensionPageLoad() hook
-│       ├── App.tsx          # Root React component (tab switcher: Import / Chat / Settings)
+│       ├── App.tsx          # Root React component (single unified chat view + settings dialog)
 │       ├── api.ts           # Backend API client (typed fetch wrapper)
 │       ├── i18n.ts          # Tiny i18n (zh-CN default, English fallback)
 │       ├── index.css        # Scoped Tailwind CSS (no preflight; all vars under .favai-root)
 │       ├── vite-env.d.ts    # Vite client type references
+│       ├── hooks/
+│       │   ├── use-auto-scroll.ts       # Auto-scroll to bottom on new messages
+│       │   ├── use-autosize-textarea.ts  # Auto-resize textarea to fit content
+│       │   └── use-copy-to-clipboard.ts  # Clipboard copy helper
 │       ├── lib/
 │       │   ├── utils.ts     # cn() utility (clsx + tailwind-merge)
 │       │   └── portal.ts    # Portal container setter (keeps floating UI inside .favai-root)
 │       ├── agent/           # pi agent infrastructure (browser-embedded)
 │       │   ├── fetchShim.ts # Sentinel-domain fetch wrapper → llm_proxy endpoint
 │       │   ├── provider.ts  # buildModels() — create pi-ai Models from favai Config
-│       │   ├── factory.ts   # createImportAgent() / createChatAgent()
-│       │   ├── prompts.ts   # System prompts (import rules + chat assistant)
+│       │   ├── factory.ts   # createImportAgent() / createChatAgent() / createUnifiedAgent()
+│       │   ├── prompts.ts   # System prompts (import rules + chat assistant + unified)
 │       │   ├── favaApi.ts   # getLedgerData(), runQuery(), flattenTable()
+│       │   ├── toChatMessages.ts  # AgentMessage[] → Chat UI Message[] converter
 │       │   └── tools/
 │       │       ├── importTool.ts  # propose_transactions tool (TypeBox schema)
-│       │       └── bqlTool.ts     # bql_query tool (fava BQL API)
+│       │       ├── bqlTool.ts     # bql_query tool (fava BQL API)
+│       │       └── dateTool.ts    # today tool (current date, used in unified agent)
 │       └── components/
-│           ├── ImportTab.tsx         # Import workflow (ingest → agent → proposal table)
-│           ├── ChatTab.tsx           # Chat agent UI (streaming messages + tool indicators)
-│           ├── SettingsTab.tsx       # LLM provider configuration form
+│           ├── UnifiedChat.tsx       # Unified import + chat interface (single component)
+│           ├── SettingsTab.tsx       # LLM provider configuration form (in dialog)
 │           ├── ProposalTable.tsx     # Editable transaction proposal table
 │           ├── AccountCombobox.tsx   # Searchable account picker
-│           └── ui/                  # shadcn/ui primitives (button, input, table, combobox, etc.)
+│           └── ui/                  # shadcn/ui primitives (31 components)
+│               ├── chat.tsx, badge.tsx, button.tsx, callout.tsx, card.tsx, ...
+│               ├── dialog.tsx, table.tsx, combobox.tsx, select.tsx, switch.tsx, ...
+│               └── ...
 │
 ├── tests/                   # Python unit tests (pytest)
 │   ├── test_config.py       # ProviderConfig validation, serialisation, masking
@@ -88,27 +99,34 @@ favai/
 
 ---
 
+
 ## Technology Stack
 
 ### Backend (Python)
-- **Python 3.14+** with `from __future__ import annotations` everywhere
-- **fava ≥ 1.30.14** (Flask extension API: `FavaExtensionBase`, `extension_endpoint`)
-- **pypdf ≥ 5.0** — PDF text extraction
-- **httpx ≥ 0.27** — streaming HTTP client for the LLM proxy
+- **Python 3.13+** with `from __future__ import annotations` everywhere
+- **fava >= 1.30.14** (Flask extension API: `FavaExtensionBase`, `extension_endpoint`)
+- **pypdf >= 5.0** — PDF text extraction
+- **httpx >= 0.27** — streaming HTTP client for the LLM proxy
 - **hatchling** — build system
 - **uv** — dependency management
+- **PaddleOCR >= 3.7.0** (optional: `pip install favai[ocr]`) — image OCR with onnxruntime
 
 ### Frontend (TypeScript / React)
 - **React 19.1**, React DOM 19.1
 - **TypeScript 5.8** (strict, ES2022 target, bundler module resolution)
-- **shadcn/ui** (radix-nova style) with Base UI React 1.6
-- **Tailwind CSS 4.1** (no preflight, scoped under `.favai-root`)
+- **shadcn/ui** (radix-nova style) with Base UI React 1.6 + `@shadcn/react`
+- **Tailwind CSS 4.1** (no preflight, scoped under `.favai-root`, `@tailwindcss/vite` plugin)
 - **Vite 7** (lib mode: single `FavaAI.js` with inlined CSS, minified)
 - **pi-agent-core 0.81.1** — Agent class (tool execution, streaming events)
 - **pi-ai 0.81.1** — Models/Provider/streamSimple (OpenAI + Anthropic SDKs)
+- **framer-motion** — animations (drag-and-drop overlay, file previews)
+- **react-markdown** + **remark-gfm** — markdown rendering in chat messages
 - **typebox** — Tool parameter JSON schema validation
 - **lucide-react** icons, **sonner** toasts
+- **remeda** — utility library (functional data manipulation)
 - **clsx** + **tailwind-merge** (cn() helper)
+- **radix-ui** (meta package), **@radix-ui/react-collapsible**
+- **tw-animate-css** — Tailwind CSS animation utilities
 
 ### No External Runtime
 The agent runs in the browser — **no Node.js or `pi` CLI dependency** at runtime.
@@ -129,8 +147,20 @@ browser using `@earendil-works/pi-agent-core`.  This eliminates:
 **Tool execution** happens fully on the frontend:
 - `propose_transactions` — updates React state directly (no backend needed)
 - `bql_query` — `fetch()` to fava's built-in `GET /<slug>/api/query/` endpoint
+- `today` — returns the current date (used in unified agent for date context)
 
-### LLM Proxy (``llm_proxy``)
+### Unified Agent (Single Agent for Import + Chat)
+
+Instead of maintaining separate import and chat agents, the current frontend
+uses a **single unified agent** with both `propose_transactions` and `bql_query`
+tools. The agent decides which tool to use based on the user's input:
+- If the user attaches files or pastes bill text → `propose_transactions`
+- If the user asks a ledger question → `bql_query`
+
+The `UnifiedChat` component replaces the previous tab-switcher design. Settings
+are accessed via a gear icon button that opens a dialog overlay.
+
+### LLM Proxy (`llm_proxy`)
 
 pi-ai's provider SDKs construct URLs by appending paths (e.g.
 `/chat/completions` for OpenAI, `/v1/messages` for Anthropic).  Fava's
@@ -162,6 +192,22 @@ To bridge this:
 favai stores its config in `.favai/` next to the beancount file (one
 `config.json` only — no `models.json` since there is no pi subprocess).
 
+The `ProviderConfig` dataclass includes these fields:
+- `api` — `"openai-completions"` or `"anthropic-messages"`
+- `base_url` — API endpoint URL
+- `model` — model identifier
+- `api_key` — literal key or `$ENV_VAR` reference
+- `vision` — whether the model supports image inputs
+- `context_window` — max context window in tokens (default: 128000)
+- `max_tokens` — max output tokens (default: 16384)
+
+### OCR (Optional)
+
+favai uses **PaddleOCR** (PP-OCRv6, onnxruntime engine) for extracting text
+from uploaded bill images as a fallback for non-vision models. The OCR model
+is loaded lazily (once, thread-safe with double-checked locking) and reused
+across calls. Install with `pip install favai[ocr]`.
+
 ### Style Isolation
 
 Fava provides only a JS channel for extensions (no separate CSS).  The frontend:
@@ -189,6 +235,11 @@ All commands use the `Makefile` at the project root:
 - `vite.config.ts` builds in **lib mode** — single ES module output.
 - `cssCodeSplit: false` — everything inlined.
 - `inlineDynamicImports: true` — pi-ai's lazy SDK imports bundled inline.
+- `define: { "process.env.NODE_ENV": JSON.stringify("production") }` — inlines
+  `NODE_ENV` for runtime environment checks in dependencies.
+- `emptyOutDir: false` — preserves the Python package directory (never empties it).
+- `@tailwindcss/vite` plugin used for Tailwind CSS v4 integration.
+- `tsc --noEmit` runs before build (type-checking step in `npm run build`).
 - Output goes directly to `src/favai/FavaAI.js` (committed in git, ~1.5 MB).
 - CI checks: `make build && git diff --exit-code` ensures the built JS matches source.
 
@@ -216,7 +267,7 @@ uv run pytest tests/test_proxy.py::test_openai_auth_header
 ## Code Style & Conventions
 
 ### Python
-- **Python 3.14+** — uses `from __future__ import annotations` (PEP 604 syntax everywhere).
+- **Python 3.13+** — uses `from __future__ import annotations` (PEP 604 syntax everywhere).
 - **Ruff** for linting and formatting (configured in `pyproject.toml`). Run `make lint` to check.
 - Import order: standard library → third-party → first-party.
 - Error messages in **Chinese** (用户面消息) for most user-facing strings; technical/protocol errors in English.
@@ -224,6 +275,7 @@ uv run pytest tests/test_proxy.py::test_openai_auth_header
 - `api_response` decorator wraps JSON endpoints with `{success: true, data}` / `{success: false, error}`.
   The `llm_proxy` endpoint does **not** use `api_response` — it returns the upstream response raw.
 - `from __future__ import annotations` is the first import in every module.
+- OCR module (`ocr.py`) uses lazy-init with double-checked locking for thread-safe model loading.
 
 ### TypeScript / Frontend
 - **Strict TypeScript** (`noUnusedLocals`, `noUnusedParameters`, `strict`, `verbatimModuleSyntax`).
@@ -232,6 +284,8 @@ uv run pytest tests/test_proxy.py::test_openai_auth_header
 - i18n via a simple `t()` function with two dictionaries (zh-CN + en). New UI strings must be added to both dictionaries.
 - Tool `execute` functions must **throw** on error (agent catches and reports as `isError`).
   Do not return error messages as content.
+- Agent transcript is the single source of truth for chat messages — `toChatMessages()`
+  derives the Chat UI `Message[]` shape from `agent.state.messages` (no manual mirroring).
 
 ### Project-specific Conventions
 - The built `src/favai/FavaAI.js` is committed to git. Do **not** edit it by hand — always `make build`.
@@ -243,13 +297,14 @@ uv run pytest tests/test_proxy.py::test_openai_auth_header
 ## Dependencies & Tools Required
 
 ### Runtime (end user)
-- **Python ≥ 3.14** with **fava ≥ 1.30.14** and **httpx ≥ 0.27**
+- **Python >= 3.13** with **fava >= 1.30.14** and **httpx >= 0.27**
 - LLM provider (any OpenAI-compatible or Anthropic-compatible API)
 - No Node.js or `pi` runtime needed.
+- OCR: optional, `pip install favai[ocr]` installs PaddleOCR + onnxruntime.
 
 ### Development
 - `uv` (Python package manager)
-- `Node.js ≥ 18` and `npm` (for developing the frontend bundle)
+- `Node.js >= 18` and `npm` (for developing the frontend bundle)
 - `pytest`, `ruff` (installed via uv dev deps)
 - `agent-browser` (npm) for E2E testing with browser automation
 - A beancount file with `2026-01-01 custom "fava-extension" "favai"` to load the extension
@@ -258,7 +313,7 @@ uv run pytest tests/test_proxy.py::test_openai_auth_header
 
 ## Data Flow
 
-### Import flow
+### Import flow (via unified agent)
 
 ```
 Browser (FavaAI.js)
@@ -268,8 +323,8 @@ Browser (FavaAI.js)
   │
 2. Build prompt from #ledger-data (accounts, currencies, payees) + ingest result
   │
-3. createImportAgent(config, onProposal)
-   └─ pi-agent-core Agent + propose_transactions tool
+3. createUnifiedAgent(config, onProposal)
+   └─ pi-agent-core Agent + propose_transactions, bql_query, today tools
   │
 4. agent.prompt(prompt, images)
    └─ pi-ai builds provider request → fetch shim rewrites to /llm_proxy
@@ -284,25 +339,25 @@ Browser (FavaAI.js)
       └─ to_fava_entries() → deserialise() → ledger.file.insert_entries()
 
 User clicks "Discard"
-   └─ agent.abort() + reset state (no backend call needed)
+   └─ agent.reset() + reset state (no backend call needed)
 ```
 
-### Chat flow
+### Chat flow (via unified agent)
 
 ```
 Browser (FavaAI.js)
-  │ User types a question (e.g. "What was my food spend?")
+  │ User types a question (no files attached)
   ▼
-1. createChatAgent(config)
-   └─ pi-agent-core Agent + bql_query tool + CHAT_SYSTEM_PROMPT
+1. Agent system prompt set to UNIFIED_SYSTEM_PROMPT
   │
 2. agent.prompt(question)
-   └─ pi-ai → llm_proxy → LLM → tool_call: bql_query
+   └─ pi-ai → llm_proxy → LLM → tool_call: bql_query or today
       └─ bql_query.execute() → fetch /<slug>/api/query/?query_string=...
          → flattenTable() → result text
+      └─ today.execute() → current date string
    └─ Agent sends tool result back to LLM → LLM summarises → text_delta events
   │
-3. Streaming text rendered in ChatTab via agent.subscribe (message_update / text_delta)
+3. Streaming text rendered in UnifiedChat via agent.subscribe + toChatMessages()
 ```
 
 ---
