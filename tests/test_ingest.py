@@ -52,6 +52,7 @@ def test_image_becomes_base64(monkeypatch):
 
 
 def test_image_ocr_success(monkeypatch):
+    monkeypatch.setattr("favai.ingest.ocr_available", lambda: True)
     monkeypatch.setattr(
         "favai.ingest._paddle_ocr",
         Mock(return_value="海底捞 268元\n7月20日\n"),
@@ -67,18 +68,40 @@ def test_image_ocr_success(monkeypatch):
     assert "海底捞" in result.texts[0]
 
 
-def test_image_ocr_failure(monkeypatch):
+def test_image_ocr_no_text(monkeypatch):
+    """OCR returning None (no text detected) is not a warning."""
+    monkeypatch.setattr("favai.ingest.ocr_available", lambda: True)
     monkeypatch.setattr(
         "favai.ingest._paddle_ocr",
         Mock(return_value=None),
     )
     result = ingest_uploads([("bad.png", _valid_png())])
-    # Image is still returned even when OCR fails
+    # Image is still returned even when OCR yields no text
     assert len(result.images) == 1
-    # No text from failed OCR
     assert not result.texts
-    # No warning either — OCR failure is silently ignored
     assert not result.warnings
+
+
+def test_image_without_ocr_installed_warns(monkeypatch):
+    """Uploading an image without an OCR engine surfaces a warning."""
+    monkeypatch.setattr("favai.ingest.ocr_available", lambda: False)
+    result = ingest_uploads([("shot.png", _valid_png())])
+    assert len(result.images) == 1
+    assert not result.texts
+    assert any("OCR" in w and "vision" in w for w in result.warnings)
+
+
+def test_image_ocr_runtime_error_warns(monkeypatch):
+    """Runtime OCR failures surface as a per-image warning."""
+    monkeypatch.setattr("favai.ingest.ocr_available", lambda: True)
+    monkeypatch.setattr(
+        "favai.ingest._paddle_ocr",
+        Mock(side_effect=RuntimeError("boom")),
+    )
+    result = ingest_uploads([("bad.png", _valid_png())])
+    assert len(result.images) == 1
+    assert not result.texts
+    assert any("OCR 失败" in w and "bad.png" in w for w in result.warnings)
 
 
 def test_pdf_text_extraction():

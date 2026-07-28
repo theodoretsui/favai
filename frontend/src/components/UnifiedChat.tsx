@@ -1,7 +1,8 @@
+import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { api, type Config, type Transaction } from "@/api";
+import { api, type Config, type Status, type Transaction } from "@/api";
 import { t } from "@/i18n";
 import { getLedgerData } from "@/agent/favaApi";
 import { buildImportPrompt, UNIFIED_SYSTEM_PROMPT } from "@/agent/prompts";
@@ -16,10 +17,10 @@ import type { Agent } from "@earendil-works/pi-agent-core";
 
 export function UnifiedChat({
   config,
-  configured,
+  status,
 }: {
   config: Config | null;
-  configured: boolean;
+  status: Status | null;
 }) {
   // Re-render trigger: bumped on every agent event so the derived message list
   // reflects the latest ``agent.state``. The agent transcript is the single
@@ -82,6 +83,40 @@ export function UnifiedChat({
       return proposal;
     });
   }
+
+  // Wrap setFiles: warn immediately when an image is attached but neither
+  // vision nor OCR can read it.
+  const handleFilesChange: Dispatch<SetStateAction<File[] | null>> = useCallback(
+    (next) => {
+      setFiles((prev) => {
+        const resolved =
+          typeof next === "function"
+            ? (next as (p: File[] | null) => File[] | null)(prev)
+            : next;
+        const prevImages = new Set(
+          (prev ?? [])
+            .filter((f) => f.type.startsWith("image/"))
+            .map((f) => `${f.name}:${f.size}:${f.lastModified}`),
+        );
+        const addedImage = (resolved ?? []).some(
+          (f) =>
+            f.type.startsWith("image/") &&
+            !prevImages.has(`${f.name}:${f.size}:${f.lastModified}`),
+        );
+        if (
+          addedImage &&
+          !config?.vision &&
+          !(status?.ocr_available ?? false)
+        ) {
+          toast.warning(
+            `${t("warning.title")}: ${t("warning.image.no_reader")}`,
+          );
+        }
+        return resolved;
+      });
+    },
+    [config?.vision, status?.ocr_available],
+  );
 
   function resetSession() {
     agentRef.current?.reset();
@@ -196,7 +231,7 @@ export function UnifiedChat({
 
   // ── Render ──────────────────────────────────────────────────────────────
 
-  const isConfigured = configured;
+  const isConfigured = status?.configured ?? false;
 
   return (
     <div className="flex flex-col gap-4">
@@ -219,7 +254,7 @@ export function UnifiedChat({
           stop={abort}
           allowAttachments
           files={files}
-          setFiles={setFiles}
+          setFiles={handleFilesChange}
           placeholder={
             isConfigured
               ? t("chat.input.placeholder")

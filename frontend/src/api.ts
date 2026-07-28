@@ -7,6 +7,7 @@
 
 export interface Status {
   configured: boolean;
+  ocr_available: boolean;
 }
 
 export type ApiKind = "openai-completions" | "anthropic-messages";

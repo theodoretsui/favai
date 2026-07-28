@@ -52,6 +52,29 @@ class FavaAI(FavaExtensionBase):
         if self.config:
             parsed = ProviderConfig(**self.config)
             save_config(self.data_dir, parsed)
+        # Warm up PaddleOCR in the background so the first image import
+        # doesn't stall while ~200MB of weights download.  No-op when the
+        # optional dependency isn't installed.
+        self._warm_up_ocr()
+
+    @staticmethod
+    def _warm_up_ocr() -> None:
+        from favai.ocr import ocr_available, prefetch
+
+        if not ocr_available():
+            return
+        import logging
+        import threading
+
+        log = logging.getLogger(__name__)
+
+        def _run() -> None:
+            try:
+                prefetch()
+            except Exception:
+                log.warning("favai OCR warm-up failed", exc_info=True)
+
+        threading.Thread(target=_run, name="favai-ocr-warmup", daemon=True).start()
 
     @property
     def data_dir(self) -> Path:
@@ -66,12 +89,15 @@ class FavaAI(FavaExtensionBase):
     @api_response
     def api_status(self) -> dict[str, Any]:
         """Check whether the provider is configured."""
+        from favai.ocr import ocr_available
+
         config = load_config(self.data_dir)
         try:
             config.validate()
-            return {"configured": True}
+            configured = True
         except ConfigError:
-            return {"configured": False}
+            configured = False
+        return {"configured": configured, "ocr_available": ocr_available()}
 
     @extension_endpoint("config", ["GET", "POST"])
     @api_response

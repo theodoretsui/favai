@@ -91,6 +91,8 @@ const zhCN = {
   "warning.title": "警告",
   "warning.vision.disabled.images_ignored":
     "当前模型未启用 vision，已忽略 {count} 张图片，将仅使用 OCR/文本内容。",
+  "warning.image.no_reader":
+    "未启用 vision 且未安装 OCR，附加的图片将无法被识别。请开启 vision，或运行 `pip install favai[ocr]` 安装 OCR。",
 
   "import.validation.currencyUnspecified": "未指定币种",
   "import.validation.dateInvalid": "第 {index} 笔交易的日期格式无效：{date}",
@@ -191,6 +193,8 @@ const en: Record<I18nKey, string> = {
   "warning.title": "Warning",
   "warning.vision.disabled.images_ignored":
     "Vision is disabled for the current model; {count} image(s) ignored, using text/OCR content only.",
+  "warning.image.no_reader":
+    "Vision is disabled and OCR is not installed — attached images cannot be read. Enable vision, or run `pip install favai[ocr]`.",
 
   "import.validation.currencyUnspecified": "unspecified currency",
   "import.validation.dateInvalid": "Transaction {index} has an invalid date: {date}",

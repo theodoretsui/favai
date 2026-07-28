@@ -84,10 +84,10 @@ export default function App() {
       )}
 
       {/* Main chat interface */}
-      <UnifiedChat config={config} configured={status?.configured ?? false} />
+      <UnifiedChat config={config} status={status} />
 
       {/* Sonner renders inline (no portal), so it inherits .favai-root vars */}
-      <Toaster position="top-center" />
+      <Toaster position="top-center" expand />
     </div>
   );
 }

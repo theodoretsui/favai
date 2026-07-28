@@ -57,11 +57,21 @@ def ocr_available() -> bool:
     return _HAS_PADDLEOCR
 
 
+def prefetch() -> None:
+    """Force PaddleOCR to load (and, on first run, download) its models.
+
+    Intended for post-install warm-up so the first user request doesn't
+    stall while several hundred MB of ONNX weights stream in.
+    Raises ``RuntimeError`` if PaddleOCR is not installed.
+    """
+    _get_ocr()
+
+
 def ocr_image(data: bytes) -> str | None:
     """Run OCR on raw image bytes and return the extracted text.
 
-    Returns ``None`` if PaddleOCR is not installed, no text was found,
-    or if OCR fails.
+    Returns ``None`` if PaddleOCR is not installed or no text was found.
+    Raises the underlying exception if OCR fails at runtime.
     """
     if not _HAS_PADDLEOCR:
         return None
@@ -74,8 +84,6 @@ def ocr_image(data: bytes) -> str | None:
     try:
         ocr = _get_ocr()
         pages = list(ocr.predict(tmp_path))
-    except Exception:  # noqa: BLE001 — OCR failure is silently ignored
-        return None
     finally:
         try:
             os.unlink(tmp_path)

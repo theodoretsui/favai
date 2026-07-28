@@ -3,7 +3,7 @@ name = "favai"
 version = "0.1.0"
 description = "AI-powered bill import for Fava, driven by the pi agent framework"
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.12"
 dependencies = [
     "fava>=1.30.14",
     "pypdf>=5.0",
@@ -15,6 +15,9 @@ ocr = [
     "paddleocr>=3.7.0",
     "onnxruntime>=1.26.0",
 ]
+
+[project.scripts]
+favai-prefetch-ocr = "favai.cli_prefetch:main"
 
 [build-system]
 requires = ["hatchling"]

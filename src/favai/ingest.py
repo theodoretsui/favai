@@ -7,6 +7,7 @@ import io
 from dataclasses import dataclass, field
 from typing import BinaryIO
 
+from favai.ocr import ocr_available
 from favai.ocr import ocr_image as _paddle_ocr
 
 IMAGE_SUFFIXES = {
@@ -38,14 +39,6 @@ def _pdf_text(data: BinaryIO) -> str:
     return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
-def _ocr_image(data: bytes) -> str | None:
-    """Run OCR on image bytes and return the extracted text.
-
-    Returns ``None`` if no text was found or if OCR fails.
-    """
-    return _paddle_ocr(data)
-
-
 def ingest_file(filename: str, data: bytes, result: IngestResult) -> None:
     """Classify one upload and add it to the ingest result."""
     lower = filename.lower()
@@ -57,9 +50,14 @@ def ingest_file(filename: str, data: bytes, result: IngestResult) -> None:
             {"data": base64.b64encode(data).decode(), "mimeType": image_mime}
         )
         # Run OCR to extract text for non-vision models
-        ocr_text = _ocr_image(data)
-        if ocr_text:
-            result.texts.append(f"--- OCR：{filename} ---\n{ocr_text}")
+        if ocr_available():
+            try:
+                ocr_text = _paddle_ocr(data)
+            except Exception as exc:  # noqa: BLE001 - surfaced as a warning
+                result.warnings.append(f"图片「{filename}」OCR 失败：{exc}")
+                return
+            if ocr_text:
+                result.texts.append(f"--- OCR：{filename} ---\n{ocr_text}")
         return
 
     if suffix == ".pdf":
@@ -95,6 +93,12 @@ def ingest_uploads(
         result.texts.append(f"--- 用户粘贴的账单文本 ---\n{pasted_text.strip()}")
     for filename, data in files:
         ingest_file(filename, data, result)
+    if result.images and not ocr_available():
+        result.warnings.append(
+            "检测到图片但未安装 OCR 引擎："
+            "非 vision 模型将无法读取图片内容。"
+            "请启用 vision，或运行 `pip install favai[ocr]` 安装 OCR。"
+        )
     if not result.texts and not result.images:
         result.warnings.append("没有可用的账单材料：请上传文件或粘贴文本。")
     return result
