@@ -6,13 +6,20 @@
  * transcript is the single source of truth -- no manual streaming delta
  * assembly or "indicator" messages are needed.
  */
-import { contentText, type Message as PiAiMessage } from "@earendil-works/pi-ai";
+import type { Message as PiAiMessage } from "@earendil-works/pi-ai";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Message } from "@/components/ui/chat";
 
 interface ToolResultLookup {
   result: unknown;
   isError: boolean;
+}
+
+const INGEST_BLOCK_PREFIX = "<favai-ingest>\n";
+
+/** Mark extracted file/OCR text as a distinct user-message content block. */
+export function ingestContentBlock(text: string): { type: "text"; text: string } {
+  return { type: "text", text: `${INGEST_BLOCK_PREFIX}${text}` };
 }
 
 /**
@@ -49,6 +56,7 @@ export function toChatMessages(
   if (streaming) {
     out.push(toChatMessage(streaming, resultsById));
   }
+
   return out;
 }
 
@@ -57,11 +65,26 @@ function toChatMessage(
   resultsById: Map<string, ToolResultLookup>,
 ): Message {
   if (msg.role === "user") {
+    const ingestTexts: string[] = [];
+    let visibleText = "";
+    if (typeof msg.content === "string") {
+      visibleText = msg.content;
+    } else {
+      for (const block of msg.content) {
+        if (block.type !== "text") continue;
+        if (block.text.startsWith(INGEST_BLOCK_PREFIX)) {
+          ingestTexts.push(block.text.slice(INGEST_BLOCK_PREFIX.length));
+        } else {
+          visibleText += block.text;
+        }
+      }
+    }
     return {
       id: `u-${msg.timestamp}`,
       role: "user",
-      content: contentText(msg.content),
+      content: visibleText,
       createdAt: new Date(msg.timestamp),
+      ingestTexts: ingestTexts.length > 0 ? ingestTexts : undefined,
     };
   }
 

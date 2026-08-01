@@ -172,9 +172,13 @@ export function ImportTab({
         accs,
         currencies,
         payees,
-        ingestResult.texts,
         currentDate,
+        ingestResult.warnings,
       );
+      // Append bill materials to the prompt since they are sent as the
+      // user message (not hidden in a system prompt).
+      const billTexts = ingestResult.texts.join("\n\n");
+      const billPrompt = billTexts ? `${prompt}\n\n${billTexts}` : prompt;
 
       // 3. Show user message immediately with parsed file contents
       const fileTexts = ingestResult.texts;
@@ -235,7 +239,7 @@ export function ImportTab({
             ),
             []);
       await agent.prompt(
-        prompt,
+        billPrompt,
         images.length > 0 ? (images as never) : undefined,
       );
       unsub();

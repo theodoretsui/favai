@@ -96,20 +96,21 @@ export function Chat({
 
   return (
     <ChatContainer className={className}>
-      {messages.length > 0 ? (
-        <ChatMessages messages={messages}>
-          <MessageList
-            messages={messages}
-            isTyping={isTyping}
-            messageOptions={messageOptions}
-          />
-        </ChatMessages>
-      ) : isProcessing ? (
-        <ChatMessages messages={messages}>
-          <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>{t("chat.processing")}</span>
-          </div>
+      {messages.length > 0 || isProcessing ? (
+        <ChatMessages messages={messages} isProcessing={isProcessing}>
+          {messages.length > 0 ? (
+            <MessageList
+              messages={messages}
+              isTyping={isTyping}
+              messageOptions={messageOptions}
+            />
+          ) : null}
+          {isProcessing ? (
+            <div className="mt-2 flex w-fit items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>{t("chat.processing")}</span>
+            </div>
+          ) : null}
         </ChatMessages>
       ) : null}
 
@@ -132,9 +133,11 @@ Chat.displayName = "Chat"
 
 export function ChatMessages({
   messages,
+  isProcessing = false,
   children,
 }: React.PropsWithChildren<{
   messages: Message[]
+  isProcessing?: boolean
 }>) {
   const {
     containerRef,
@@ -142,7 +145,7 @@ export function ChatMessages({
     handleScroll,
     shouldAutoScroll,
     handleTouchStart,
-  } = useAutoScroll([messages])
+  } = useAutoScroll([messages, isProcessing])
 
   return (
     <div

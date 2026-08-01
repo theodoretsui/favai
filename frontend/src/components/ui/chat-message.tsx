@@ -130,6 +130,8 @@ export interface Message {
   experimental_attachments?: Attachment[]
   toolInvocations?: ToolInvocation[]
   parts?: MessagePart[]
+  /** Extracted/OCR text from ingested files, rendered as a collapsible block */
+  ingestTexts?: string[]
 }
 
 export interface ChatMessageProps extends Message {
@@ -148,6 +150,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   experimental_attachments,
   toolInvocations,
   parts,
+  ingestTexts,
 }) => {
   const files = useMemo(() => {
     return experimental_attachments?.map((attachment) => {
@@ -179,9 +182,19 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           </div>
         ) : null}
 
-        <div className={cn(chatBubbleVariants({ isUser, animation }))}>
-          <MarkdownRenderer>{content}</MarkdownRenderer>
-        </div>
+        {ingestTexts?.map((ingestText, index) => (
+          <ExtractedContentBlock
+            index={index}
+            key={index}
+            text={ingestText}
+          />
+        ))}
+
+        {content ? (
+          <div className={cn(chatBubbleVariants({ isUser, animation }))}>
+            <MarkdownRenderer>{content}</MarkdownRenderer>
+          </div>
+        ) : null}
 
         {showTimeStamp && createdAt ? (
           <time
@@ -293,7 +306,7 @@ const ReasoningBlock = ({ part }: { part: ReasoningPart }) => {
       >
         <div className="flex items-center p-2">
           <CollapsibleTrigger asChild>
-            <button className="flex items-center gap-2 text-sm text-white">
+            <button className="flex items-center gap-2 text-sm text-foreground">
               <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]:rotate-90" />
               <span>{t("chat.reasoning")}</span>
             </button>
@@ -313,6 +326,53 @@ const ReasoningBlock = ({ part }: { part: ReasoningPart }) => {
             <div className="p-2">
               <div className="whitespace-pre-wrap text-xs">
                 {part.reasoning}
+              </div>
+            </div>
+          </motion.div>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
+  )
+}
+
+const ExtractedContentBlock = ({
+  index,
+  text,
+}: {
+  index: number
+  text: string
+}) => {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <div className="mb-2 flex w-full flex-col items-end sm:max-w-[70%]">
+      <Collapsible
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        className="group w-full overflow-hidden rounded-lg border bg-muted/50 text-foreground dark:bg-primary/15"
+      >
+        <div className="flex items-center p-2">
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-2 text-sm text-foreground">
+              <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]:rotate-90" />
+              <span>{t("chat.parsed.content.item", { index: index + 1 })}</span>
+            </button>
+          </CollapsibleTrigger>
+        </div>
+        <CollapsibleContent forceMount>
+          <motion.div
+            initial={false}
+            animate={isOpen ? "open" : "closed"}
+            variants={{
+              open: { height: "auto", opacity: 1 },
+              closed: { height: 0, opacity: 0 },
+            }}
+            transition={{ duration: 0.3, ease: [0.04, 0.62, 0.23, 0.98] }}
+            className="border-t"
+          >
+            <div className="p-2">
+              <div className="whitespace-pre-wrap text-xs text-foreground">
+                {text}
               </div>
             </div>
           </motion.div>

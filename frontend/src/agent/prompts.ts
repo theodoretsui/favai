@@ -11,8 +11,8 @@ export function buildImportPrompt(
   accounts: string[],
   currencies: string[],
   payees: string[],
-  texts: string[],
   currentDate: string,
+  warnings: string[] = [],
 ): string {
   const parts: string[] = [];
 
@@ -51,10 +51,11 @@ export function buildImportPrompt(
     parts.push(payees.join("\n"));
   }
 
-  // Bill materials
-  for (let i = 0; i < texts.length; i++) {
-    parts.push(`=== 账单材料 ${i + 1}（文本）===`);
-    parts.push(texts[i]);
+  // Warnings from processing
+  if (warnings.length > 0) {
+    parts.push("## 处理提醒");
+    parts.push("系统在处理账单材料时产生了以下提醒，请阅读并在回复中告知用户：");
+    parts.push(warnings.map((w) => `- ${w}`).join("\n"));
   }
 
   // Closing instruction

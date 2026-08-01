@@ -7,7 +7,10 @@ import { t } from "@/i18n";
 import { getLedgerData } from "@/agent/favaApi";
 import { buildImportPrompt, UNIFIED_SYSTEM_PROMPT } from "@/agent/prompts";
 import { createUnifiedAgent } from "@/agent/factory";
-import { toChatMessages } from "@/agent/toChatMessages";
+import {
+  ingestContentBlock,
+  toChatMessages,
+} from "@/agent/toChatMessages";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -141,17 +144,13 @@ export function UnifiedChat({
     try {
       let images: { data: string; mimeType: string }[] = [];
 
-      // The text shown in the user's chat bubble is always just what they
-      // typed. The bill-materials context is routed through the agent's
-      // systemPrompt (read by createContextSnapshot) so it reaches the LLM
-      // without polluting the visible transcript.
-      let displayText = currentInput;
+      let ingestTexts: string[] = [];
 
       if (hasFiles) {
         // Import mode: ingest files, build import prompt.
         setIsProcessing(true);
         try {
-          const ingestResult = await api.ingest(files ?? [], currentInput);
+          const ingestResult = await api.ingest(files ?? [], "");
           for (const warning of ingestResult.warnings) {
             toast.warning(`${t("warning.title")}: ${warning}`);
           }
@@ -161,10 +160,12 @@ export function UnifiedChat({
             accs,
             currencies,
             payees,
-            ingestResult.texts,
             currentDate,
+            ingestResult.warnings,
           );
           agent.state.systemPrompt = `${UNIFIED_SYSTEM_PROMPT}\n\n${importContext}`;
+          ingestTexts = ingestResult.texts;
+
           images = ingestResult.images;
           if (!config.vision && images.length > 0) {
             toast.warning(
@@ -182,10 +183,22 @@ export function UnifiedChat({
         agent.state.systemPrompt = UNIFIED_SYSTEM_PROMPT;
       }
 
-      await agent.prompt(
-        displayText,
-        images.length > 0 ? (images as never) : undefined,
-      );
+      if (ingestTexts.length > 0) {
+        await agent.prompt({
+          role: "user",
+          timestamp: Date.now(),
+          content: [
+            { type: "text", text: currentInput },
+            ...ingestTexts.map(ingestContentBlock),
+            ...images.map((image) => ({ type: "image" as const, ...image })),
+          ],
+        });
+      } else {
+        await agent.prompt(
+          currentInput,
+          images.length > 0 ? (images as never) : undefined,
+        );
+      }
 
       if (agent.state.errorMessage) {
         throw new Error(agent.state.errorMessage);
