@@ -2,8 +2,8 @@ PYTHON := uv run
 
 .PHONY: deps build test lint dev run
 
-deps: ## Install Python and frontend dependencies
-	uv sync
+deps: ## Install Python (with OCR extra) and frontend dependencies
+	uv sync --extra ocr
 	cd frontend && npm install
 
 build: ## Build the frontend bundle into src/favai/FavaAI.js
@@ -19,5 +19,7 @@ lint: ## Ruff lint + format check
 run: ## Serve the example ledger
 	$(PYTHON) fava example/example.beancount -p 5500
 
-dev: ## fava --debug + vite watch (requires two terminals or `&`)
-	$(PYTHON) fava --debug example/example.beancount -p 5500 & cd frontend && npm run dev
+dev: ## Run fava --debug and vite watch together
+	cd frontend && npx --no-install concurrently --kill-others --names fava,vite \
+	"cd .. && $(PYTHON) fava --debug example/example.beancount -p 5500" \
+	"npm run dev"
