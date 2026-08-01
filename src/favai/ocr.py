@@ -67,6 +67,92 @@ def prefetch() -> None:
     _get_ocr()
 
 
+def _format_tui(page: dict[str, Any]) -> str:
+    """Format a single OCR page result as a TUI-style spatial layout.
+
+    Groups text blocks into rows by y-coordinate (adaptive tolerance:
+    40% of median text height), sorts each row left-to-right, and
+    inserts blank lines between visual blocks.
+
+    Falls back to plain newline-joined text when bounding boxes are
+    unavailable or don't match the texts.
+    """
+    texts = _get(page, "rec_texts", [])
+    boxes = _get(page, "rec_boxes", None)
+
+    # Normalize to plain Python lists — PaddleOCR onnxruntime may return
+    # numpy arrays, and bool(numpy_array) raises "ambiguous truth value".
+    texts = list(texts) if texts is not None else []
+    if not texts:
+        return ""
+
+    if boxes is not None:
+        boxes = list(boxes)
+    else:
+        boxes = []
+
+    if not boxes or len(texts) != len(boxes):
+        return "\n".join(texts)
+
+    # rec_boxes is xyxy: [[x1, y1, x2, y2], ...]
+    items: list[tuple[str, float, float]] = []
+    text_heights: list[float] = []
+    for i, t in enumerate(texts):
+        box = boxes[i]
+        x1 = float(box[0])
+        y1 = float(box[1])
+        y2 = float(box[3]) if len(box) > 3 else y1
+        items.append((t, x1, y1))
+        text_heights.append(y2 - y1)
+
+    # Adaptive tolerance: 40% of median text height
+    text_heights.sort()
+    TOL = 0.4 * text_heights[len(text_heights) // 2]
+
+    # Group into rows by y-coordinate
+    rows: list[list[tuple[str, float]]] = []
+    row_ys: list[float] = []
+    for t, x, y in items:
+        placed = False
+        for ri, ry in enumerate(row_ys):
+            if abs(ry - y) < TOL:
+                rows[ri].append((t, x))
+                row_ys[ri] = (ry + y) / 2.0
+                placed = True
+                break
+        if not placed:
+            rows.append([(t, x)])
+            row_ys.append(y)
+
+    if not rows:
+        return ""
+
+    # Sort rows by y, items within each row by x
+    order = sorted(range(len(rows)), key=lambda i: row_ys[i])
+    sorted_rows = [(row_ys[ri], sorted(rows[ri], key=lambda p: p[1])) for ri in order]
+
+    # Compute median gap between consecutive rows for block detection
+    if len(sorted_rows) > 1:
+        gaps = [
+            sorted_rows[i + 1][0] - sorted_rows[i][0]
+            for i in range(len(sorted_rows) - 1)
+        ]
+        gaps.sort()
+        median_gap = gaps[len(gaps) // 2]
+    else:
+        median_gap = 0.0
+
+    # Build output, inserting blank lines between blocks
+    out: list[str] = []
+    for i, (_, row) in enumerate(sorted_rows):
+        out.append("  ".join(t for t, _ in row))
+        if i < len(sorted_rows) - 1:
+            gap = sorted_rows[i + 1][0] - sorted_rows[i][0]
+            if median_gap > 0 and gap > median_gap * 1.5:
+                out.append("")
+    return "\n".join(out)
+
+
 def ocr_image(data: bytes) -> str | None:
     """Run OCR on raw image bytes and return the extracted text.
 
@@ -90,11 +176,10 @@ def ocr_image(data: bytes) -> str | None:
         except OSError:
             pass
 
-    lines: list[str] = []
+    parts: list[str] = []
     for page in pages:
-        texts = _get(page, "rec_texts", [])
-        lines.extend(texts)
-    text = "\n".join(lines).strip()
+        parts.append(_format_tui(page))
+    text = "\n\n".join(parts).strip()
     return text if text else None
 
 
