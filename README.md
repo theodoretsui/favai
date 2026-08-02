@@ -33,15 +33,27 @@ favai backend (Flask, stateless)
 
 ### Prerequisites
 
-- Python >= 3.13
+- Python >= 3.12
 - Fava >= 1.30.14
 - An LLM API key (OpenAI, Anthropic, or any compatible endpoint)
 
-### Install from source
+### Install from PyPI
+
+```bash
+pip install favai
+```
+
+With OCR fallback for image-based bills:
+
+```bash
+pip install "favai[ocr]"
+```
+
+### Install from source (development)
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-org/favai.git
+git clone https://github.com/theodoretsui/favai.git
 cd favai
 
 # Install Python dependencies
@@ -64,7 +76,7 @@ The extension page will appear at `/<your-ledger>/extension/FavaAI/`.
 ### Optional: OCR support
 
 ```bash
-pip install favai[ocr]
+pip install "favai[ocr]"
 # or: uv sync --extra ocr
 ```
 
@@ -133,3 +145,8 @@ make run
 ```
 
 See also `AGENTS.md` for architecture details and code conventions.
+
+## License
+
+This project does not yet declare a license. Do not assume permission to
+redistribute or modify it until a license is added.
