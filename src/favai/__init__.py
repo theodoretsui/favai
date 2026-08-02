@@ -18,6 +18,16 @@ from favai.config import (
     save_config,
 )
 from favai.entries import to_fava_entries
+from favai.history import (
+    HistoryError,
+    archive_session,
+    create_session,
+    get_session,
+    list_sessions,
+    mark_confirmed,
+    rename_session,
+    save_session,
+)
 from favai.ingest import ingest_uploads
 from favai.proxy import ProxyError, forward_llm
 
@@ -29,7 +39,7 @@ def api_response(func: Callable[..., Any]) -> Callable[..., dict[str, Any]]:
     def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
         try:
             return {"success": True, "data": func(*args, **kwargs)}
-        except (ConfigError, ProxyError, ValueError) as exc:
+        except (ConfigError, HistoryError, ProxyError, ValueError) as exc:
             return {"success": False, "error": str(exc)}
         except Exception as exc:  # noqa: BLE001 - surfaced to the frontend
             return {"success": False, "error": f"{type(exc).__name__}: {exc}"}
@@ -126,6 +136,63 @@ class FavaAI(FavaExtensionBase):
         return load_config(self.data_dir).to_public_dict()
 
     # ------------------------------------------------------------------
+    # conversation history
+    # ------------------------------------------------------------------
+
+    @extension_endpoint("sessions", ["GET", "POST"])
+    @api_response
+    def api_sessions(self) -> dict[str, Any]:
+        """List sessions or create a new one."""
+        if request.method == "POST":
+            payload = request.get_json(force=True)
+            return create_session(
+                self.data_dir,
+                title=payload.get("title", "新对话"),
+                model_api=payload.get("model_api", ""),
+                model_name=payload.get("model_name", ""),
+            )
+        return list_sessions(
+            self.data_dir,
+            limit=request.args.get("limit", 30, type=int),
+            offset=request.args.get("offset", 0, type=int),
+        )
+
+    @extension_endpoint("session", ["GET", "POST"])
+    @api_response
+    def api_session(self) -> dict[str, Any]:
+        """Load or rename one session."""
+        if request.method == "POST":
+            payload = request.get_json(force=True)
+            return rename_session(
+                self.data_dir, payload.get("session_id", ""), payload.get("title", "")
+            )
+        return get_session(self.data_dir, request.args.get("session_id", ""))
+
+    @extension_endpoint("session_save", ["POST"])
+    @api_response
+    def api_session_save(self) -> dict[str, Any]:
+        """Atomically persist a complete conversation snapshot."""
+        payload = request.get_json(force=True)
+        return save_session(
+            self.data_dir,
+            payload.get("session_id", ""),
+            expected_revision=payload.get("expected_revision", -1),
+            messages=payload.get("messages", []),
+            proposal=payload.get("proposal"),
+            proposal_dirty=bool(payload.get("proposal_dirty", False)),
+            pending_proposal=payload.get("pending_proposal"),
+            title=payload.get("title"),
+        )
+
+    @extension_endpoint("session_delete", ["POST"])
+    @api_response
+    def api_session_delete(self) -> dict[str, Any]:
+        """Archive a conversation session."""
+        payload = request.get_json(force=True)
+        archive_session(self.data_dir, payload.get("session_id", ""))
+        return {"deleted": True}
+
+    # ------------------------------------------------------------------
     # ingest
     # ------------------------------------------------------------------
 
@@ -190,4 +257,7 @@ class FavaAI(FavaExtensionBase):
 
         entries = [deserialise(entry) for entry in entries_json]
         self.ledger.file.insert_entries(entries)
+        session_id = payload.get("session_id")
+        if session_id:
+            mark_confirmed(self.data_dir, session_id, count=len(entries))
         return {"inserted": len(entries)}

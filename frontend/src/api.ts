@@ -42,6 +42,41 @@ export interface ImportConfirmResult {
   inserted: number;
 }
 
+export interface SessionSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  revision: number;
+  model_api: string;
+  model_name: string;
+  has_proposal: number;
+  proposal_dirty: number;
+  confirmed_at: string | null;
+  confirmed_count: number | null;
+}
+
+export interface Session extends Omit<SessionSummary, "has_proposal"> {
+  messages: unknown[];
+  proposal: Transaction[] | null;
+  pending_proposal: Transaction[] | null;
+}
+
+export interface SessionListResult {
+  sessions: SessionSummary[];
+  has_more: boolean;
+}
+
+export interface SessionSave {
+  session_id: string;
+  expected_revision: number;
+  messages: unknown[];
+  proposal: Transaction[] | null;
+  proposal_dirty: boolean;
+  pending_proposal: Transaction[] | null;
+  title?: string;
+}
+
 export interface IngestResult {
   texts: string[];
   images: { data: string; mimeType: string }[];
@@ -94,6 +129,26 @@ export const api = {
       body: form,
     });
   },
-  importConfirm: (transactions: Transaction[]) =>
-    postJson<ImportConfirmResult>("import_confirm", { transactions }),
+  importConfirm: (transactions: Transaction[], sessionId?: string) =>
+    postJson<ImportConfirmResult>("import_confirm", {
+      transactions,
+      session_id: sessionId,
+    }),
+  listSessions: () => request<SessionListResult>("sessions?limit=30"),
+  createSession: (title: string, config: Config) =>
+    postJson<Session>("sessions", {
+      title,
+      model_api: config.api,
+      model_name: config.model,
+    }),
+  getSession: (sessionId: string) =>
+    request<Session>(`session?session_id=${encodeURIComponent(sessionId)}`),
+  renameSession: (sessionId: string, title: string) =>
+    postJson<Session>("session", { session_id: sessionId, title }),
+  saveSession: (state: SessionSave) =>
+    postJson<Session>("session_save", state),
+  deleteSession: (sessionId: string) =>
+    postJson<{ deleted: boolean }>("session_delete", {
+      session_id: sessionId,
+    }),
 };

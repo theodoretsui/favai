@@ -45,6 +45,14 @@ const zhCN = {
   "chat.tool.result": "返回结果",
   "chat.not.configured": "请先完成 LLM API 配置。",
 
+  "history.new": "新对话",
+  "history.empty": "暂无历史对话",
+  "history.rename": "重命名",
+  "history.rename.prompt": "输入新的对话标题",
+  "history.delete": "删除",
+  "history.delete.confirm": "确定删除这段对话吗？",
+  "history.conflict": "该对话已在其他窗口更新，请重新打开。",
+
   "proposal.title": "提案预览",
   "proposal.empty": "暂无提案，等待 LLM 提取结果。",
   "proposal.new.available": "LLM 给出了新提案",
@@ -68,6 +76,9 @@ const zhCN = {
   "confirm.success": "已写入 {count} 条交易",
   "discard.submit": "放弃",
   "discard.done": "已放弃本次导入",
+
+  "imported.title": "已导入记录",
+  "imported.count": "{count} 条",
 
   "settings.title": "设置",
   "settings.status.title": "配置状态",
@@ -148,6 +159,14 @@ const en: Record<I18nKey, string> = {
   "chat.tool.result": "Result from",
   "chat.not.configured": "Please configure the LLM API first.",
 
+  "history.new": "New chat",
+  "history.empty": "No conversation history",
+  "history.rename": "Rename",
+  "history.rename.prompt": "Enter a new conversation title",
+  "history.delete": "Delete",
+  "history.delete.confirm": "Delete this conversation?",
+  "history.conflict": "This conversation changed in another tab. Reopen it to continue.",
+
   "proposal.title": "Proposal preview",
   "proposal.empty": "No proposal yet — waiting for the LLM to extract transactions.",
   "proposal.new.available": "The LLM produced a new proposal",
@@ -171,6 +190,9 @@ const en: Record<I18nKey, string> = {
   "confirm.success": "Inserted {count} transaction(s)",
   "discard.submit": "Discard",
   "discard.done": "Import discarded",
+
+  "imported.title": "Imported records",
+  "imported.count": "{count} entries",
 
   "settings.title": "Settings",
   "settings.status.title": "Configuration status",
