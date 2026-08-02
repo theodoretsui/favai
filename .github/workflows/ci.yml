@@ -36,7 +36,7 @@ jobs:
         run: git diff --exit-code -- src/favai/FavaAI.js
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
           python-version: "3.13"
