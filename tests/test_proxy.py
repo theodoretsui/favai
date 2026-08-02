@@ -87,6 +87,33 @@ def test_openai_auth_header(monkeypatch):
     assert headers["Authorization"] == "Bearer real-key"
 
 
+def test_openai_empty_key_omits_authorization_header():
+    config = ProviderConfig(
+        api="openai-completions",
+        base_url="http://localhost:4000/v1",
+        model="local-model",
+        api_key="",
+    )
+    headers = _build_upstream_headers("/models", {"accept": "application/json"}, config)
+    assert "Authorization" not in headers
+
+
+def test_internal_provider_routing_headers_are_not_forwarded(monkeypatch):
+    monkeypatch.setenv("KEY", "key")
+    config = ProviderConfig(
+        base_url="https://example.test", model="model", api_key="$KEY"
+    )
+    headers = _build_upstream_headers(
+        "/chat/completions",
+        {
+            "X-Favai-Provider": "deepseek",
+            "X-Favai-Upstream": "/chat/completions",
+        },
+        config,
+    )
+    assert not any(name.lower().startswith("x-favai-") for name in headers)
+
+
 def test_openai_dummy_auth_stripped(monkeypatch):
     monkeypatch.setenv("K", "k")
     config = ProviderConfig(
@@ -124,6 +151,18 @@ def test_anthropic_auth_header(monkeypatch):
     assert lower_headers.get("x-api-key") == "sk-ant-real"
     assert lower_headers.get("x-api-key") != "dummy"
     assert lower_headers.get("anthropic-version") == "2023-06-01"
+
+
+def test_anthropic_empty_key_omits_api_key_but_keeps_version():
+    config = ProviderConfig(
+        api="anthropic-messages",
+        base_url="http://localhost:4000",
+        model="local-model",
+        api_key="",
+    )
+    headers = _build_upstream_headers("/v1/models", {}, config)
+    assert "x-api-key" not in headers
+    assert headers["anthropic-version"] == "2023-06-01"
 
 
 def test_anthropic_adds_missing_version(monkeypatch):

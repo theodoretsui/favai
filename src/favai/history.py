@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_STATE_BYTES = 8 * 1024 * 1024
 
 
@@ -51,6 +51,7 @@ def _migrate(connection: sqlite3.Connection) -> None:
                     updated_at TEXT NOT NULL,
                     archived INTEGER NOT NULL DEFAULT 0,
                     revision INTEGER NOT NULL DEFAULT 0,
+                    model_provider TEXT NOT NULL DEFAULT '',
                     model_api TEXT NOT NULL DEFAULT '',
                     model_name TEXT NOT NULL DEFAULT '',
                     messages_json TEXT NOT NULL DEFAULT '[]',
@@ -66,6 +67,13 @@ def _migrate(connection: sqlite3.Connection) -> None:
                 "CREATE INDEX sessions_updated_at ON sessions(updated_at DESC)"
             )
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        return
+    if version < 2:
+        with connection:
+            connection.execute(
+                "ALTER TABLE sessions ADD COLUMN model_provider TEXT NOT NULL DEFAULT ''"
+            )
+            connection.execute("PRAGMA user_version = 2")
 
 
 def _encode(value: Any, field: str) -> str:
@@ -94,29 +102,45 @@ def _validate_messages(messages: Any) -> list[dict[str, Any]]:
     return messages
 
 
-def _title(value: Any) -> str:
-    title = str(value or "新对话").strip()
-    return title[:80] or "新对话"
+def _title(value: Any, *, default: str = "新对话") -> str:
+    title = str(value or default).strip()
+    return title[:80] or default
+
+
+def _default_title(now: datetime) -> str:
+    """Return the default session title in the ledger server's local time."""
+    return now.astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def create_session(
     data_dir: Path,
     *,
-    title: str = "新对话",
+    title: str | None = None,
+    model_provider: str = "",
     model_api: str = "",
     model_name: str = "",
 ) -> dict[str, Any]:
     """Create and return an empty conversation session."""
     session_id = str(uuid.uuid4())
-    now = _now()
+    now_datetime = datetime.now(UTC)
+    now = now_datetime.isoformat()
     with _connect(data_dir) as connection:
         connection.execute(
             """
             INSERT INTO sessions (
-                id, title, created_at, updated_at, model_api, model_name
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                id, title, created_at, updated_at, model_provider,
+                model_api, model_name
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, _title(title), now, now, model_api, model_name),
+            (
+                session_id,
+                _title(title, default=_default_title(now_datetime)),
+                now,
+                now,
+                model_provider,
+                model_api,
+                model_name,
+            ),
         )
     return get_session(data_dir, session_id)
 
@@ -130,8 +154,8 @@ def list_sessions(
     with _connect(data_dir) as connection:
         rows = connection.execute(
             """
-            SELECT id, title, created_at, updated_at, revision, model_api,
-                   model_name, proposal_json IS NOT NULL AS has_proposal,
+            SELECT id, title, created_at, updated_at, revision, model_provider,
+                   model_api, model_name, proposal_json IS NOT NULL AS has_proposal,
                    proposal_dirty, confirmed_at, confirmed_count
             FROM sessions
             WHERE archived = 0

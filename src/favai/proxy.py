@@ -36,6 +36,8 @@ _SKIP_HEADERS = frozenset(
         "proxy-authenticate",
         "te",
         "trailer",
+        "x-favai-provider",
+        "x-favai-upstream",
     }
 )
 
@@ -77,10 +79,11 @@ def _build_upstream_headers(
 
     api_key = _resolve_key(config.api_key)
 
-    if config.api == "openai-completions":
+    if config.api == "openai-completions" and api_key:
         result["Authorization"] = f"Bearer {api_key}"
     elif config.api == "anthropic-messages":
-        result["x-api-key"] = api_key
+        if api_key:
+            result["x-api-key"] = api_key
         # Ensure the anthropic-version header is present; the SDK always sends it.
         if "anthropic-version" not in result:
             result["anthropic-version"] = "2023-06-01"

@@ -13,6 +13,7 @@ export interface Status {
 export type ApiKind = "openai-completions" | "anthropic-messages";
 
 export interface Config {
+  provider: string;
   api: ApiKind;
   base_url: string;
   model: string;
@@ -21,6 +22,15 @@ export interface Config {
   vision: boolean;
   context_window: number;
   max_tokens: number;
+}
+
+export interface ProviderPreset {
+  id: string;
+  name: string;
+  api: ApiKind;
+  base_url: string;
+  model: string;
+  vision: boolean;
 }
 
 export interface Posting {
@@ -48,6 +58,7 @@ export interface SessionSummary {
   created_at: string;
   updated_at: string;
   revision: number;
+  model_provider: string;
   model_api: string;
   model_name: string;
   has_proposal: number;
@@ -118,6 +129,16 @@ export const api = {
   status: () => request<Status>("status"),
   getConfig: () => request<Config>("config"),
   saveConfig: (config: Config) => postJson<Config>("config", config),
+  listProviderConfigs: () => request<Config[]>("provider_configs"),
+  testConfig: (config: Config) =>
+    postJson<{ config: Config; models: string[] }>("config_test", config),
+  listProviders: () => request<ProviderPreset[]>("providers"),
+  listModels: (config?: Config, provider?: string) =>
+    config
+      ? postJson<{ models: string[] }>("models", config)
+      : request<{ models: string[] }>(
+          `models${provider ? `?provider=${encodeURIComponent(provider)}` : ""}`,
+        ),
   ingest: (files: File[], text: string, vision: boolean) => {
     const form = new FormData();
     for (const file of files) {
@@ -135,10 +156,11 @@ export const api = {
       transactions,
       session_id: sessionId,
     }),
-  listSessions: () => request<SessionListResult>("sessions?limit=30"),
-  createSession: (title: string, config: Config) =>
+  listSessions: (offset = 0, limit = 30) =>
+    request<SessionListResult>(`sessions?limit=${limit}&offset=${offset}`),
+  createSession: (config: Config) =>
     postJson<Session>("sessions", {
-      title,
+      model_provider: config.provider,
       model_api: config.api,
       model_name: config.model,
     }),

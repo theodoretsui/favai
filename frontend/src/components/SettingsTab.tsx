@@ -1,7 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { api, type ApiKind, type Config, type Status } from "@/api";
+import {
+  api,
+  type ApiKind,
+  type Config,
+  type ProviderPreset,
+  type Status,
+} from "@/api";
 import { t } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,12 +33,24 @@ export function SettingsForm({
   onStatusChange: (status: Status) => void;
 }) {
   const [config, setConfig] = useState<Config | null>(null);
+  const [providers, setProviders] = useState<ProviderPreset[]>([]);
+  const [storedConfigs, setStoredConfigs] = useState<Config[]>([]);
+  const [models, setModels] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const modelRequestRef = useRef(0);
 
   useEffect(() => {
+    api.listProviders().then(setProviders).catch(() => {});
+    api.listProviderConfigs().then(setStoredConfigs).catch(() => {});
     api
       .getConfig()
-      .then(setConfig)
+      .then((savedConfig) => {
+        setConfig(savedConfig);
+        if (savedConfig.provider !== "custom") {
+          void loadModels(savedConfig, false);
+        }
+      })
       .catch((err) =>
         toast.error(
           t("error.generic", {
@@ -42,18 +60,81 @@ export function SettingsForm({
       );
   }, []);
 
+  function selectProvider(providerId: string) {
+    const stored = storedConfigs.find((item) => item.provider === providerId);
+    if (stored) {
+      setConfig(stored);
+      setModels([]);
+      void loadModels(stored, false);
+      return;
+    }
+    const preset = providers.find((item) => item.id === providerId);
+    if (!preset) {
+      patch({ provider: "custom" });
+      return;
+    }
+    const nextConfig: Config = {
+      ...config!,
+      provider: preset.id,
+      api: preset.api,
+      base_url: preset.base_url,
+      model: preset.model,
+      vision: preset.vision,
+      api_key: "",
+      api_key_stored: false,
+    };
+    setConfig(nextConfig);
+    setModels([]);
+    void loadModels(nextConfig, false);
+  }
+
+  async function loadModels(
+    targetConfig: Config | null = config,
+    reportError = true,
+  ) {
+    if (!targetConfig) return;
+    const requestId = ++modelRequestRef.current;
+    setLoadingModels(true);
+    try {
+      const result = await api.listModels(targetConfig);
+      if (requestId !== modelRequestRef.current) return;
+      setModels(result.models);
+      if (!targetConfig.model && result.models.length > 0) {
+        patch({ model: result.models[0] });
+      }
+    } catch (err) {
+      if (requestId !== modelRequestRef.current) return;
+      if (reportError) {
+        toast.error(
+          t("error.generic", {
+            message: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
+    } finally {
+      if (requestId === modelRequestRef.current) {
+        setLoadingModels(false);
+      }
+    }
+  }
+
   function patch(partial: Partial<Config>) {
     setConfig((current) => (current ? { ...current, ...partial } : current));
   }
 
-  async function save() {
+  async function testAndSave() {
     if (!config) return;
     setSaving(true);
     try {
-      const saved = await api.saveConfig(config);
-      setConfig(saved);
+      const result = await api.testConfig(config);
+      setConfig(result.config);
+      setModels(result.models);
+      setStoredConfigs((current) => [
+        ...current.filter((item) => item.provider !== result.config.provider),
+        result.config,
+      ]);
       onStatusChange(await api.status());
-      toast.success(t("settings.saved"));
+      toast.success(t("settings.test.success"));
     } catch (err) {
       toast.error(
         t("error.generic", {
@@ -78,6 +159,25 @@ export function SettingsForm({
   return (
     <div className="flex flex-col gap-4 pt-2">
       <div className="flex flex-col gap-1.5">
+        <Label>{t("settings.provider")}</Label>
+        <Select value={config.provider} onValueChange={selectProvider}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {providers.map((provider) => (
+              <SelectItem key={provider.id} value={provider.id}>
+                {provider.name}
+              </SelectItem>
+            ))}
+            <SelectItem value="custom">
+              {t("settings.provider.custom")}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <Label>{t("settings.api")}</Label>
         <Select
           value={config.api}
@@ -101,16 +201,43 @@ export function SettingsForm({
         <Label>{t("settings.base_url")}</Label>
         <Input
           value={config.base_url}
+          disabled={config.provider !== "custom"}
           onChange={(e) => patch({ base_url: e.target.value })}
         />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <Label>{t("settings.model")}</Label>
-        <Input
-          value={config.model}
-          onChange={(e) => patch({ model: e.target.value })}
-        />
+        <div className="flex items-center gap-2">
+          <Select
+            value={config.model}
+            onValueChange={(model) => patch({ model })}
+          >
+            <SelectTrigger className="min-w-0 flex-1">
+              <SelectValue placeholder={t("settings.model.placeholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from(
+                new Set([config.model, ...models].filter(Boolean)),
+              ).map((model) => (
+                <SelectItem key={model} value={model}>
+                  {model}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-8 shrink-0"
+            onClick={() => void loadModels(config)}
+            disabled={loadingModels}
+          >
+            {loadingModels
+              ? t("settings.models.loading")
+              : t("settings.models.fetch")}
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -123,6 +250,11 @@ export function SettingsForm({
               : t("settings.api_key.placeholder")
           }
           onChange={(e) => patch({ api_key: e.target.value })}
+          onBlur={() => {
+            if (config.provider !== "custom" && config.api_key) {
+              void loadModels(config, false);
+            }
+          }}
         />
         <span className="text-xs text-muted-foreground">
           {t("settings.api_key.placeholder")}
@@ -164,8 +296,8 @@ export function SettingsForm({
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={save} disabled={saving}>
-          {t("settings.save")}
+        <Button onClick={testAndSave} disabled={saving}>
+          {saving ? t("settings.test.testing") : t("settings.test.save")}
         </Button>
       </div>
     </div>

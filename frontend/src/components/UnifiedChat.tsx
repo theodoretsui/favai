@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import {
   api,
+  type ApiKind,
   type Config,
   type Session,
   type SessionSummary,
@@ -25,7 +26,28 @@ import { Chat } from "@/components/ui/chat";
 import { ProposalTable } from "@/components/ProposalTable";
 import { SessionSidebar } from "@/components/SessionSidebar";
 import { ImportedTransactions } from "@/components/ImportedTransactions";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
+
+interface ModelChoice {
+  provider: string;
+  model: string;
+}
+
+function modelChoiceValue(choice: ModelChoice): string {
+  return JSON.stringify([choice.provider, choice.model]);
+}
+
+function parseModelChoice(value: string): ModelChoice {
+  const [provider, model] = JSON.parse(value) as [string, string];
+  return { provider, model };
+}
 
 export function UnifiedChat({
   config,
@@ -49,7 +71,14 @@ export function UnifiedChat({
     null,
   );
   const [accounts, setAccounts] = useState<string[]>([]);
+  const [providerConfigs, setProviderConfigs] = useState<Config[]>([]);
+  const [models, setModels] = useState<ModelChoice[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState("");
+  const [selectedModel, setSelectedModel] = useState("");
+  const [agentEpoch, setAgentEpoch] = useState(0);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [hasMoreSessions, setHasMoreSessions] = useState(false);
+  const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const agentRef = useRef<Agent | null>(null);
   const sessionRef = useRef<Session | null>(null);
@@ -59,12 +88,32 @@ export function UnifiedChat({
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const editSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const refreshSessions = useCallback(() => {
-    api
-      .listSessions()
-      .then((result) => setSessions(result.sessions))
-      .catch(showError);
+  const refreshSessions = useCallback(async () => {
+    try {
+      const result = await api.listSessions();
+      setSessions(result.sessions);
+      setHasMoreSessions(result.has_more);
+    } catch (err) {
+      showError(err);
+    }
   }, []);
+
+  const loadMoreSessions = useCallback(async () => {
+    if (!hasMoreSessions || isLoadingMoreSessions) return;
+    setIsLoadingMoreSessions(true);
+    try {
+      const result = await api.listSessions(sessions.length);
+      setSessions((current) => {
+        const ids = new Set(current.map((session) => session.id));
+        return [...current, ...result.sessions.filter((session) => !ids.has(session.id))];
+      });
+      setHasMoreSessions(result.has_more);
+    } catch (err) {
+      showError(err);
+    } finally {
+      setIsLoadingMoreSessions(false);
+    }
+  }, [hasMoreSessions, isLoadingMoreSessions, sessions.length]);
 
   // Load ledger accounts on mount.
   useEffect(() => {
@@ -80,13 +129,58 @@ export function UnifiedChat({
     refreshSessions();
   }, [refreshSessions]);
 
+  useEffect(() => {
+    if (!config) return;
+    if (!sessionRef.current) {
+      setSelectedProvider(config.provider);
+      setSelectedModel(config.model);
+    }
+    api.listProviderConfigs().then(async (configs) => {
+      setProviderConfigs(configs);
+      const discovered = await Promise.all(
+        configs.map(async (providerConfig) => {
+          try {
+            const result = await api.listModels(undefined, providerConfig.provider);
+            return result.models.map((model) => ({
+              provider: providerConfig.provider,
+              model,
+            }));
+          } catch {
+            return providerConfig.model
+              ? [{ provider: providerConfig.provider, model: providerConfig.model }]
+              : [];
+          }
+        }),
+      );
+      setModels(discovered.flat());
+    }).catch(() => {
+      setProviderConfigs([config]);
+      setModels(config.model ? [{ provider: config.provider, model: config.model }] : []);
+    });
+  }, [config]);
+
+  const effectiveProvider =
+    currentSession?.model_provider || selectedProvider || config?.provider || "";
+  const effectiveConfig =
+    providerConfigs.find((item) => item.provider === effectiveProvider) ||
+    (config?.provider === effectiveProvider ? config : null);
+  const effectiveModel =
+    currentSession?.model_name || selectedModel || config?.model || "";
+  const effectiveApi = (currentSession?.model_api || effectiveConfig?.api) as
+    | ApiKind
+    | undefined;
+
   // Create the unified agent when config is available. Subscribe for the
   // component lifetime so every streaming event re-renders the derived list.
   useEffect(() => {
-    if (!config) return;
-    const agent = createUnifiedAgent(config, (txns) => {
-      applyProposal(txns);
-    });
+    if (!effectiveConfig) return;
+    if (!effectiveModel || !effectiveApi) return;
+    const agent = createUnifiedAgent(
+      { ...effectiveConfig, api: effectiveApi, model: effectiveModel },
+      (txns) => {
+        applyProposal(txns);
+      },
+    );
     if (sessionRef.current) {
       agent.state.messages = sessionRef.current.messages as AgentMessage[];
     }
@@ -97,7 +191,13 @@ export function UnifiedChat({
       agent.abort();
       agentRef.current = null;
     };
-  }, [config, bump]);
+  }, [
+    effectiveConfig,
+    effectiveApi,
+    effectiveModel,
+    agentEpoch,
+    bump,
+  ]);
 
   const showError = useCallback((err: unknown) => {
     toast.error(
@@ -185,7 +285,7 @@ export function UnifiedChat({
         );
         if (
           addedImage &&
-          !config?.vision &&
+          !effectiveConfig?.vision &&
           !(status?.ocr_available ?? false)
         ) {
           toast.warning(
@@ -195,7 +295,7 @@ export function UnifiedChat({
         return resolved;
       });
     },
-    [config?.vision, status?.ocr_available],
+    [effectiveConfig?.vision, status?.ocr_available],
   );
 
   function resetSession() {
@@ -214,12 +314,10 @@ export function UnifiedChat({
       if (editSaveTimerRef.current) clearTimeout(editSaveTimerRef.current);
       await persistSession();
       const session = await api.getSession(sessionId);
-      const agent = agentRef.current;
-      if (!agent) return;
-      agent.reset();
-      agent.state.messages = session.messages as AgentMessage[];
-      agent.state.systemPrompt = UNIFIED_SYSTEM_PROMPT;
       setSession(session);
+      setSelectedProvider(session.model_provider || config?.provider || "");
+      setSelectedModel(session.model_name);
+      setAgentEpoch((value) => value + 1);
       replaceTransactions(session.proposal);
       replaceDirty(Boolean(session.proposal_dirty));
       replacePendingProposal(session.pending_proposal);
@@ -267,7 +365,13 @@ export function UnifiedChat({
     const content = input.trim();
     const hasFiles = (files?.length ?? 0) > 0;
     const agent = agentRef.current;
-    if ((!content && !hasFiles) || !agent || !config) return;
+    const model = currentSession?.model_name || selectedModel;
+    const modelApi = (currentSession?.model_api || effectiveConfig?.api) as ApiKind;
+    const activeConfig =
+      effectiveConfig && model
+        ? { ...effectiveConfig, api: modelApi, model }
+        : null;
+    if ((!content && !hasFiles) || !agent || !activeConfig) return;
 
     const currentInput = content;
     setInput("");
@@ -275,11 +379,7 @@ export function UnifiedChat({
 
     try {
       if (!sessionRef.current) {
-        const fallbackTitle = hasFiles
-          ? t("unified.import.title")
-          : t("history.new");
-        const title = (currentInput || fallbackTitle).slice(0, 40);
-        const created = await api.createSession(title, config);
+        const created = await api.createSession(activeConfig);
         setSession(created);
         refreshSessions();
       }
@@ -291,7 +391,11 @@ export function UnifiedChat({
         // Import mode: ingest files, build import prompt.
         setIsProcessing(true);
         try {
-          const ingestResult = await api.ingest(files ?? [], "", config.vision);
+          const ingestResult = await api.ingest(
+            files ?? [],
+            "",
+            activeConfig.vision,
+          );
           for (const warning of ingestResult.warnings) {
             toast.warning(`${t("warning.title")}: ${warning}`);
           }
@@ -308,7 +412,7 @@ export function UnifiedChat({
           ingestTexts = ingestResult.texts;
 
           images = ingestResult.images;
-          if (!config.vision && images.length > 0) {
+          if (!activeConfig.vision && images.length > 0) {
             toast.warning(
               t("warning.vision.disabled.images_ignored", {
                 count: images.length,
@@ -397,6 +501,23 @@ export function UnifiedChat({
   // ── Render ──────────────────────────────────────────────────────────────
 
   const isConfigured = status?.configured ?? false;
+  const availableModelChoices = Array.from(
+    new Map(
+      [
+        ...(effectiveProvider && effectiveModel
+          ? [{ provider: effectiveProvider, model: effectiveModel }]
+          : []),
+        ...providerConfigs
+          .filter((item) => item.model)
+          .map((item) => ({ provider: item.provider, model: item.model })),
+        ...models,
+      ].map((choice) => [modelChoiceValue(choice), choice]),
+    ).values(),
+  );
+  const selectedModelValue =
+    effectiveProvider && effectiveModel
+      ? modelChoiceValue({ provider: effectiveProvider, model: effectiveModel })
+      : "";
 
   return (
     <div className="flex min-h-0 flex-col gap-3 md:flex-row">
@@ -408,35 +529,74 @@ export function UnifiedChat({
         onOpen={(id) => void openSession(id)}
         onRename={(session) => void renameHistory(session)}
         onDelete={(session) => void deleteHistory(session)}
+        hasMore={hasMoreSessions}
+        isLoadingMore={isLoadingMoreSessions}
+        onLoadMore={() => void loadMoreSessions()}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-4">
-      {/* Callout for config status */}
-      {!isConfigured && (
-        <Callout variant="warning">
-          {t("unified.callout.not_configured")}
-        </Callout>
-      )}
+        {/* Callout for config status */}
+        {!isConfigured && (
+          <Callout variant="warning">
+            {t("unified.callout.not_configured")}
+          </Callout>
+        )}
 
-      {/* Main Chat area */}
-      <div className="flex h-[32rem] max-h-[calc(100vh-12rem)] flex-col rounded-xl border p-4">
-        <Chat
-          messages={chatMessages}
-          input={input}
-          handleInputChange={handleInputChange}
-          handleSubmit={handleSubmit}
-          isGenerating={isGenerating}
-          isProcessing={isProcessing}
-          stop={abort}
-          allowAttachments
-          files={files}
-          setFiles={handleFilesChange}
-          placeholder={
-            isConfigured
-              ? t("chat.input.placeholder")
-              : t("chat.not.configured")
-          }
-        />
-      </div>
+        {/* Main Chat area */}
+        <div className="flex h-[32rem] max-h-[calc(100vh-12rem)] flex-col rounded-xl border p-4">
+          <div className="mb-3 flex items-center gap-2 border-b pb-3">
+            <span className="text-xs text-muted-foreground">
+              {t("chat.model")}
+            </span>
+            <Select
+              value={selectedModelValue}
+              onValueChange={(value) => {
+                const choice = parseModelChoice(value);
+                setSelectedProvider(choice.provider);
+                setSelectedModel(choice.model);
+              }}
+              disabled={Boolean(currentSession) || isProcessing || isGenerating}
+            >
+              <SelectTrigger
+                className="h-8 w-[18rem] max-w-full"
+                title={currentSession ? t("chat.model.locked") : undefined}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableModelChoices.map((choice) => (
+                  <SelectItem
+                    key={modelChoiceValue(choice)}
+                    value={modelChoiceValue(choice)}
+                  >
+                    {choice.provider} / {choice.model}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {currentSession && (
+              <span className="text-xs text-muted-foreground">
+                {t("chat.model.locked")}
+              </span>
+            )}
+          </div>
+          <Chat
+            messages={chatMessages}
+            input={input}
+            handleInputChange={handleInputChange}
+            handleSubmit={handleSubmit}
+            isGenerating={isGenerating}
+            isProcessing={isProcessing}
+            stop={abort}
+            allowAttachments
+            files={files}
+            setFiles={handleFilesChange}
+            placeholder={
+              isConfigured
+                ? t("chat.input.placeholder")
+                : t("chat.not.configured")
+            }
+          />
+        </div>
 
       {/* Confirmed imports are immutable history, not an active proposal. */}
       {transactions && currentSession?.confirmed_at && (

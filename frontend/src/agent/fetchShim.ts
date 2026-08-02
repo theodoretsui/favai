@@ -26,7 +26,9 @@ window.fetch = (input, init) => {
     ? window.location.pathname
     : `${window.location.pathname}/`;
 
-  const headers = new Headers(init?.headers);
+  const requestHeaders =
+    init?.headers ?? (input instanceof Request ? input.headers : undefined);
+  const headers = new Headers(requestHeaders);
   headers.set("X-Favai-Upstream", upstream);
   // Strip dummy auth headers sent by the SDK — the backend injects the real key.
   headers.delete("authorization");

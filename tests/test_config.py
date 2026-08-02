@@ -9,7 +9,9 @@ import pytest
 from favai.config import (
     ConfigError,
     ProviderConfig,
+    config_from_public_payload,
     load_config,
+    load_configs,
     save_config,
 )
 
@@ -25,6 +27,40 @@ def test_roundtrip(tmp_path):
     )
     save_config(tmp_path, config)
     assert load_config(tmp_path) == config
+    raw = json.loads((tmp_path / "config.json").read_text())
+    assert raw == [config.__dict__]
+
+
+def test_multiple_provider_configs_are_upserted(tmp_path):
+    openai = ProviderConfig(
+        provider="openai", base_url="https://api.openai.com/v1", model="gpt"
+    )
+    anthropic = ProviderConfig(
+        provider="anthropic",
+        api="anthropic-messages",
+        base_url="https://api.anthropic.com",
+        model="claude",
+    )
+    save_config(tmp_path, openai)
+    save_config(tmp_path, anthropic)
+
+    active, configs = load_configs(tmp_path)
+    assert active == "anthropic"
+    assert configs == [openai, anthropic]
+    assert load_config(tmp_path, "openai") == openai
+
+
+def test_legacy_flat_config_is_loaded(tmp_path):
+    (tmp_path / "config.json").write_text(
+        json.dumps(
+            {
+                "provider": "deepseek",
+                "base_url": "https://api.deepseek.com",
+                "model": "deepseek-v4-flash",
+            }
+        )
+    )
+    assert load_config(tmp_path).provider == "deepseek"
 
 
 def test_load_defaults_when_missing(tmp_path):
@@ -34,7 +70,7 @@ def test_load_defaults_when_missing(tmp_path):
 def test_load_ignores_unknown_keys(tmp_path):
     save_config(tmp_path, ProviderConfig(base_url="https://x", model="m"))
     raw = json.loads((tmp_path / "config.json").read_text())
-    raw["future_key"] = 1
+    raw[0]["future_key"] = 1
     (tmp_path / "config.json").write_text(json.dumps(raw))
     assert load_config(tmp_path).base_url == "https://x"
 
@@ -66,3 +102,19 @@ def test_public_dict_keeps_env_reference():
     public = config.to_public_dict()
     assert public["api_key"] == "$MY_KEY"
     assert public["api_key_stored"] is True
+
+
+def test_public_payload_keeps_masked_key_for_same_provider():
+    current = ProviderConfig(provider="openai", api_key="secret")
+    updated = config_from_public_payload(
+        current, {"provider": "openai", "api_key": "secr****"}
+    )
+    assert updated.api_key == "secret"
+
+
+def test_public_payload_clears_key_when_provider_changes():
+    current = ProviderConfig(provider="openai", api_key="openai-secret")
+    updated = config_from_public_payload(
+        current, {"provider": "anthropic", "api_key": ""}
+    )
+    assert updated.api_key == ""

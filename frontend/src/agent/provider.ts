@@ -15,6 +15,9 @@ export interface BuiltModels {
 }
 
 export function buildModels(config: Config): BuiltModels {
+  // Keep the pi-ai provider identity stable for transcript compatibility;
+  // the backend routing header selects the concrete stored provider config.
+  const providerId = "favai";
   const input: ("text" | "image")[] = config.vision
     ? ["text", "image"]
     : ["text"];
@@ -23,7 +26,7 @@ export function buildModels(config: Config): BuiltModels {
     id: config.model,
     name: config.model,
     api: config.api,
-    provider: "favai",
+    provider: providerId,
     // The sentinel domain has no path — the SDK appends its own suffix
     // (openai → /chat/completions, anthropic → /v1/messages).
     // The backend proxy prepends config.base_url to the captured path.
@@ -41,7 +44,8 @@ export function buildModels(config: Config): BuiltModels {
     : openAICompletionsApi();
   models.setProvider(
     createProvider({
-      id: "favai",
+      id: providerId,
+      headers: { "X-Favai-Provider": config.provider },
       auth: {
         apiKey: {
           name: "favai proxy key",

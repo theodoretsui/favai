@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 
 import pytest
@@ -25,17 +26,55 @@ def _message(text: str = "hello") -> dict:
 
 def test_create_and_list_session(tmp_path):
     session = create_session(
-        tmp_path, title="A conversation", model_api="openai", model_name="m"
+        tmp_path,
+        title="A conversation",
+        model_provider="openai",
+        model_api="openai",
+        model_name="m",
     )
 
     assert session["title"] == "A conversation"
     assert session["messages"] == []
     assert session["revision"] == 0
+    assert session["model_provider"] == "openai"
     assert history_path(tmp_path).exists()
 
     result = list_sessions(tmp_path)
     assert [item["id"] for item in result["sessions"]] == [session["id"]]
     assert result["has_more"] is False
+
+
+def test_create_session_uses_datetime_title_by_default(tmp_path):
+    session = create_session(tmp_path)
+
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", session["title"])
+
+
+def test_schema_v1_migrates_model_provider(tmp_path):
+    database = history_path(tmp_path)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TABLE sessions (
+                id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0,
+                revision INTEGER NOT NULL DEFAULT 0, model_api TEXT NOT NULL DEFAULT '',
+                model_name TEXT NOT NULL DEFAULT '', messages_json TEXT NOT NULL DEFAULT '[]',
+                proposal_json TEXT, proposal_dirty INTEGER NOT NULL DEFAULT 0,
+                pending_proposal_json TEXT, confirmed_at TEXT, confirmed_count INTEGER
+            )
+            """
+        )
+        connection.execute("PRAGMA user_version = 1")
+
+    create_session(tmp_path, model_provider="deepseek")
+
+    with sqlite3.connect(database) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(sessions)")}
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+    assert "model_provider" in columns
+    assert version == 2
 
 
 def test_save_roundtrip_and_revision(tmp_path):
@@ -115,15 +154,18 @@ def test_rename_confirm_and_archive(tmp_path):
 
 
 def test_list_pagination(tmp_path):
-    for number in range(3):
+    for number in range(65):
         create_session(tmp_path, title=str(number))
 
-    first = list_sessions(tmp_path, limit=2)
-    assert len(first["sessions"]) == 2
+    first = list_sessions(tmp_path, limit=30)
+    assert len(first["sessions"]) == 30
     assert first["has_more"] is True
-    second = list_sessions(tmp_path, limit=2, offset=2)
-    assert len(second["sessions"]) == 1
-    assert second["has_more"] is False
+    second = list_sessions(tmp_path, limit=30, offset=30)
+    assert len(second["sessions"]) == 30
+    assert second["has_more"] is True
+    third = list_sessions(tmp_path, limit=30, offset=60)
+    assert len(third["sessions"]) == 5
+    assert third["has_more"] is False
 
 
 def test_rejects_database_from_newer_version(tmp_path):

@@ -13,8 +13,11 @@ from flask import request
 from favai.config import (
     ConfigError,
     ProviderConfig,
+    config_from_public_payload,
+    config_path,
     data_dir_for,
     load_config,
+    public_configs,
     save_config,
 )
 from favai.entries import to_fava_entries
@@ -29,6 +32,7 @@ from favai.history import (
     save_session,
 )
 from favai.ingest import ingest_uploads
+from favai.providers import list_provider_models, provider_presets
 from favai.proxy import ProxyError, forward_llm
 
 
@@ -55,13 +59,10 @@ class FavaAI(FavaExtensionBase):
 
     def __init__(self, ledger: Any, config: str | None = None) -> None:
         super().__init__(ledger, config)
-        # Seed (or re-seed) .favai/config.json from the beancount file's
-        # extension declaration on every startup.  The beancount file is the
-        # primary configuration source; runtime changes via the Settings UI
-        # survive until the next restart / reload.
-        if self.config:
-            parsed = ProviderConfig(**self.config)
-            save_config(self.data_dir, parsed)
+        # Seed .favai/config.json from the beancount file's extension
+        # declaration only once.  Once present, config.json is authoritative:
+        # settings saved through the UI must survive Fava reloads.
+        self._seed_config(self.data_dir, self.config)
         # Warm up PaddleOCR in the background so the first image import
         # doesn't stall while ~200MB of weights download.  No-op when the
         # optional dependency isn't installed.
@@ -85,6 +86,12 @@ class FavaAI(FavaExtensionBase):
                 log.warning("favai OCR warm-up failed", exc_info=True)
 
         threading.Thread(target=_run, name="favai-ocr-warmup", daemon=True).start()
+
+    @staticmethod
+    def _seed_config(data_dir: Path, extension_config: dict[str, Any] | None) -> None:
+        """Create the initial config file from the extension declaration."""
+        if extension_config and not config_path(data_dir).exists():
+            save_config(data_dir, ProviderConfig(**extension_config))
 
     @property
     def data_dir(self) -> Path:
@@ -115,25 +122,61 @@ class FavaAI(FavaExtensionBase):
         """Read or update the LLM provider configuration."""
         if request.method == "POST":
             payload = request.get_json(force=True)
-            current = load_config(self.data_dir)
-            config = ProviderConfig(
-                api=payload.get("api", current.api),
-                base_url=payload.get("base_url", current.base_url),
-                model=payload.get("model", current.model),
-                # An empty or masked api_key keeps the previously stored one.
-                api_key=(
-                    current.api_key
-                    if not payload.get("api_key") or "****" in payload["api_key"]
-                    else payload["api_key"]
-                ),
-                vision=bool(payload.get("vision", current.vision)),
-                context_window=int(
-                    payload.get("context_window", current.context_window)
-                ),
-                max_tokens=int(payload.get("max_tokens", current.max_tokens)),
-            )
+            provider = payload.get("provider") or None
+            try:
+                current = load_config(self.data_dir, provider)
+            except ConfigError:
+                current = ProviderConfig(provider=provider or "custom")
+            config = config_from_public_payload(current, payload)
             save_config(self.data_dir, config)
         return load_config(self.data_dir).to_public_dict()
+
+    @extension_endpoint("provider_configs")
+    @api_response
+    def api_provider_configs(self) -> list[dict[str, Any]]:
+        """Return every provider configuration available to new sessions."""
+        return public_configs(self.data_dir)
+
+    @extension_endpoint("config_test", ["POST"])
+    @api_response
+    def api_config_test(self) -> dict[str, Any]:
+        """Test a provider configuration and persist it only on success."""
+        payload = request.get_json(force=True)
+        provider = payload.get("provider", "custom")
+        try:
+            current = load_config(self.data_dir, provider)
+        except ConfigError:
+            current = ProviderConfig(provider=provider)
+        config = config_from_public_payload(current, payload)
+        models = list_provider_models(config)
+        save_config(self.data_dir, config)
+        return {"config": config.to_public_dict(), "models": models}
+
+    @extension_endpoint("providers")
+    @api_response
+    def api_providers(self) -> list[dict[str, Any]]:
+        """Return the built-in quick-config provider presets."""
+        return provider_presets()
+
+    @extension_endpoint("models", ["GET", "POST"])
+    @api_response
+    def api_models(self) -> dict[str, Any]:
+        """Discover models for the saved or supplied provider config."""
+        if request.method == "POST":
+            payload = request.get_json(force=True)
+            provider = payload.get("provider") or None
+            try:
+                config = load_config(self.data_dir, provider)
+            except ConfigError:
+                config = ProviderConfig(provider=provider or "custom")
+            config = config_from_public_payload(
+                config,
+                payload,
+                placeholder_model=True,
+            )
+        else:
+            config = load_config(self.data_dir, request.args.get("provider") or None)
+        return {"models": list_provider_models(config)}
 
     # ------------------------------------------------------------------
     # conversation history
@@ -147,7 +190,8 @@ class FavaAI(FavaExtensionBase):
             payload = request.get_json(force=True)
             return create_session(
                 self.data_dir,
-                title=payload.get("title", "新对话"),
+                title=payload.get("title"),
+                model_provider=payload.get("model_provider", ""),
                 model_api=payload.get("model_api", ""),
                 model_name=payload.get("model_name", ""),
             )
@@ -225,8 +269,9 @@ class FavaAI(FavaExtensionBase):
         the upstream response as-is (including streaming SSE chunks).
         Errors are returned as ``{"success": false, "error": "..."}`` JSON.
         """
-        config = load_config(self.data_dir)
+        provider = request.headers.get("X-Favai-Provider") or None
         try:
+            config = load_config(self.data_dir, provider)
             config.validate()
         except ConfigError as exc:
             return {"success": False, "error": str(exc)}
