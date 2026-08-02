@@ -1,6 +1,6 @@
 # favai
 
-AI-powered bill import and ledger analysis extension for [Fava](https://github.com/beancount/fava), the web frontend for [Beancount](https://beancount.github.io/) double-entry accounting.
+**AI Agent Extension for [Fava](https://github.com/beancount/fava).** favai lets you interact with your [Beancount](https://beancount.github.io/) ledger through natural language — import transactions, analyze income and expenses, and explore more agent-driven workflows.
 
 ## Features
 
@@ -148,5 +148,4 @@ See also `AGENTS.md` for architecture details and code conventions.
 
 ## License
 
-This project does not yet declare a license. Do not assume permission to
-redistribute or modify it until a license is added.
+favai is licensed under the [MIT License](LICENSE).
