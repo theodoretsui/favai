@@ -1,376 +1,149 @@
-# favai — AI-powered bill import extension for Fava
+# favai — AI Agent Extension for Fava
 
 ## Project Overview
 
-favai is a [Fava](https://github.com/beancount/fava) extension (named `FavaAI`)
-that lets users import bank/credit-card bills into their beancount ledger with
-the help of an LLM agent, and chat with their ledger in natural language.
+favai is a Fava extension named `FavaAI`. It uses an LLM agent to make
+Beancount ledgers easier to operate: users can import bills from text, images,
+or PDFs, refine proposed transactions through conversation, and analyze their
+ledger with natural-language questions.
 
-The agent loop runs **directly in the browser** using
-[pi-agent-core](https://github.com/earendil-works/pi) +
-[pi-ai](https://github.com/earendil-works/pi) — no external subprocess,
-no Node.js dependency.  LLM requests pass through a thin backend proxy
-that injects the real API key.
-
-**Features:**
-- Import bills via text paste, screenshots (PNG/JPEG/WebP) or PDFs
-- Multi-turn conversation to refine proposed transactions
-- Chat agent with BQL query tool for ledger analysis
-- OCR (PaddleOCR) fallback for image text extraction
-- Configurable for any OpenAI-compatible or Anthropic-compatible provider
-
-**Language:** Python 3.13+ / TypeScript (frontend + pi-agent-core tools)  
-**License:** Not specified (check `pyproject.toml`)
-
----
-
-
-## Directory Layout
-
-```
-favai/
-├── pyproject.toml           # Python project metadata, dependencies, build config (hatchling)
-├── Makefile                 # Common dev commands (deps, test, lint, build, dev, run)
-├── uv.lock                  # uv lockfile (deterministic Python dependency resolution)
-├── .python-version          # Python version pin (3.13)
-├── .gitignore               # Python build artifacts, .venv, frontend node_modules, .favai/
-│
-├── src/favai/               # Python extension package (installed by pip/uv)
-│   ├── __init__.py          # FavaAI extension class (Flask endpoints — stateless)
-│   ├── config.py            # LLM provider config (config.json read/write, masking, $ENV_VAR)
-│   ├── entries.py           # Transaction dict → fava deserialisation shape conversion
-│   ├── ingest.py            # File upload processing (text, images, PDF text extraction)
-│   ├── proxy.py             # LLM request forwarder (injects API key, streams bytes)
-│   ├── ocr.py               # PaddleOCR integration (lazy-loaded, thread-safe, onnxruntime)
-│   ├── FavaAI.js            # Frontend build artifact (committed in git, ~1.5 MB minified)
-│   ├── templates/
-│   │   └── FavaAI.html      # fava extension page mount point (<div id="favaiApp">)
-│
-├── frontend/                # Vite + React 19 + Tailwind v4 + shadcn/ui frontend
-│   ├── package.json         # npm dependencies (react 19, shadcn, pi-agent-core, pi-ai...)
-│   ├── package-lock.json    # npm lockfile
-│   ├── vite.config.ts       # Vite lib build → src/favai/FavaAI.js (CSS inlined, minified)
-│   ├── tsconfig.json        # TypeScript strict config (ES2022, bundler resolution)
-│   ├── components.json      # shadcn/ui configuration
-│   └── src/
-│       ├── extension.ts     # Entry point: fava's onExtensionPageLoad() hook
-│       ├── App.tsx          # Root React component (single unified chat view + settings dialog)
-│       ├── api.ts           # Backend API client (typed fetch wrapper)
-│       ├── i18n.ts          # Tiny i18n (zh-CN default, English fallback)
-│       ├── index.css        # Scoped Tailwind CSS (no preflight; all vars under .favai-root)
-│       ├── vite-env.d.ts    # Vite client type references
-│       ├── hooks/
-│       │   ├── use-auto-scroll.ts       # Auto-scroll to bottom on new messages
-│       │   ├── use-autosize-textarea.ts  # Auto-resize textarea to fit content
-│       │   └── use-copy-to-clipboard.ts  # Clipboard copy helper
-│       ├── lib/
-│       │   ├── utils.ts     # cn() utility (clsx + tailwind-merge)
-│       │   └── portal.ts    # Portal container setter (keeps floating UI inside .favai-root)
-│       ├── agent/           # pi agent infrastructure (browser-embedded)
-│       │   ├── fetchShim.ts # Sentinel-domain fetch wrapper → llm_proxy endpoint
-│       │   ├── provider.ts  # buildModels() — create pi-ai Models from favai Config
-│       │   ├── factory.ts   # createImportAgent() / createChatAgent() / createUnifiedAgent()
-│       │   ├── prompts.ts   # System prompts (import rules + chat assistant + unified)
-│       │   ├── favaApi.ts   # getLedgerData(), runQuery(), flattenTable()
-│       │   ├── toChatMessages.ts  # AgentMessage[] → Chat UI Message[] converter
-│       │   └── tools/
-│       │       ├── importTool.ts  # propose_transactions tool (TypeBox schema)
-│       │       ├── bqlTool.ts     # bql_query tool (fava BQL API)
-│       │       └── dateTool.ts    # today tool (current date, used in unified agent)
-│       └── components/
-│           ├── UnifiedChat.tsx       # Unified import + chat interface (single component)
-│           ├── SettingsTab.tsx       # LLM provider configuration form (in dialog)
-│           ├── ProposalTable.tsx     # Editable transaction proposal table
-│           ├── AccountCombobox.tsx   # Searchable account picker
-│           └── ui/                  # shadcn/ui primitives (31 components)
-│               ├── chat.tsx, badge.tsx, button.tsx, callout.tsx, card.tsx, ...
-│               ├── dialog.tsx, table.tsx, combobox.tsx, select.tsx, switch.tsx, ...
-│               └── ...
-│
-├── tests/                   # Python unit tests (pytest)
-│   ├── test_config.py       # ProviderConfig validation, serialisation, masking
-│   ├── test_entries.py      # Transaction → fava entry conversion, validation
-│   ├── test_ingest.py       # File upload classification, PDF/text/image handling
-│   └── test_proxy.py        # _resolve_key, _build_upstream_headers, path validation
-│
-└── example/
-    └── example.beancount    # Demo ledger used with `make run`
-```
-
----
-
+The agent loop runs in the browser with `pi-agent-core` and `pi-ai`. A small
+Python backend handles Fava integration, file ingestion, optional OCR, and LLM
+proxying so API keys are never exposed to the browser. End users do not need
+Node.js; it is only used to build the frontend.
 
 ## Technology Stack
 
-### Backend (Python)
-- **Python 3.13+** with `from __future__ import annotations` everywhere
-- **fava >= 1.30.14** (Flask extension API: `FavaExtensionBase`, `extension_endpoint`)
-- **pypdf >= 5.0** — PDF text extraction
-- **httpx >= 0.27** — streaming HTTP client for the LLM proxy
-- **hatchling** — build system
-- **uv** — dependency management
-- **PaddleOCR >= 3.7.0** (optional: `pip install favai[ocr]`) — image OCR with onnxruntime
+- Backend: Python >= 3.12, Fava, httpx, pypdf, and optional PaddleOCR.
+- Frontend: TypeScript, React, Tailwind CSS, shadcn/ui, Vite,
+  `pi-agent-core`, and `pi-ai`.
+- Tooling: uv and hatchling for Python; npm and Vite for the frontend;
+  pytest and Ruff for verification.
+- Packaging: the frontend is bundled into `src/favai/FavaAI.js`, then included
+  in the Python wheel and source distribution.
 
-### Frontend (TypeScript / React)
-- **React 19.1**, React DOM 19.1
-- **TypeScript 5.8** (strict, ES2022 target, bundler module resolution)
-- **shadcn/ui** (radix-nova style) with Base UI React 1.6 + `@shadcn/react`
-- **Tailwind CSS 4.1** (no preflight, scoped under `.favai-root`, `@tailwindcss/vite` plugin)
-- **Vite 7** (lib mode: single `FavaAI.js` with inlined CSS, minified)
-- **pi-agent-core 0.81.1** — Agent class (tool execution, streaming events)
-- **pi-ai 0.81.1** — Models/Provider/streamSimple (OpenAI + Anthropic SDKs)
-- **framer-motion** — animations (drag-and-drop overlay, file previews)
-- **react-markdown** + **remark-gfm** — markdown rendering in chat messages
-- **typebox** — Tool parameter JSON schema validation
-- **lucide-react** icons, **sonner** toasts
-- **remeda** — utility library (functional data manipulation)
-- **clsx** + **tailwind-merge** (cn() helper)
-- **radix-ui** (meta package), **@radix-ui/react-collapsible**
-- **tw-animate-css** — Tailwind CSS animation utilities
+## Architecture and Security
 
-### No External Runtime
-The agent runs in the browser — **no Node.js or `pi` CLI dependency** at runtime.
-`npm` is only needed for frontend development builds.
+- One browser-embedded agent handles bill import and ledger chat using the
+  `propose_transactions`, `bql_query`, and `today` tools.
+- LLM requests are intercepted by the frontend fetch shim and forwarded through
+  the backend `llm_proxy`, which injects the configured API key.
+- Literal keys are masked before configuration is returned to the frontend;
+  `$ENV_VAR` references are preferred.
+- BQL access is read-only. Agent tools have no shell or filesystem access.
+- Configuration lives in `.favai/config.json` next to the ledger and must stay
+  out of version control.
+- Frontend styles and portals must remain scoped to `.favai-root`.
 
----
+## Development Workflow — Mandatory
 
-## Key Architecture Decisions
+These rules apply to every contributor and coding agent:
 
-### Browser-Embedded Agent Loop
+1. Never develop or commit directly on `main`. Before changing any file, create
+   a branch from the latest `main`, using an appropriate prefix such as
+   `feature/`, `fix/`, `docs/`, or `release/` (coding agents may use their
+   required `codex/` prefix).
+2. Keep each branch focused on one change. Commit and push only to that branch.
+3. Open a pull request targeting `main`. All changes, including README,
+   AGENTS.md, CI, and release metadata changes, must go through a PR.
+4. Wait for the required CI check (`Test, lint, and build`) and the repository
+   owner's review. Address feedback on the same branch.
+5. A coding agent must never approve its own PR, bypass branch protection,
+   reduce review requirements, enable an admin bypass, or merge a PR unless the
+   repository owner explicitly instructs it to merge that specific reviewed PR.
+   Creating a PR or being asked to commit/push is not permission to merge.
+6. If work starts while checked out on `main`, stop and create a branch before
+   editing. If uncommitted user changes prevent this safely, ask the user rather
+   than moving, discarding, or overwriting them.
 
-Instead of spawning a `pi --mode rpc` subprocess, the agent loop runs in the
-browser using `@earendil-works/pi-agent-core`.  This eliminates:
-- The Node.js runtime dependency for end users
-- Subprocess lifecycle management (stdin/stdout JSONL, 300s timeouts, zombie processes)
-- The single-session lock (multiple agents can coexist per tab)
+Normal development flow:
 
-**Tool execution** happens fully on the frontend:
-- `propose_transactions` — updates React state directly (no backend needed)
-- `bql_query` — `fetch()` to fava's built-in `GET /<slug>/api/query/` endpoint
-- `today` — returns the current date (used in unified agent for date context)
-
-### Unified Agent (Single Agent for Import + Chat)
-
-Instead of maintaining separate import and chat agents, the current frontend
-uses a **single unified agent** with both `propose_transactions` and `bql_query`
-tools. The agent decides which tool to use based on the user's input:
-- If the user attaches files or pastes bill text → `propose_transactions`
-- If the user asks a ledger question → `bql_query`
-
-The `UnifiedChat` component replaces the previous tab-switcher design. Settings
-are accessed via a gear icon button that opens a dialog overlay.
-
-### LLM Proxy (`llm_proxy`)
-
-pi-ai's provider SDKs construct URLs by appending paths (e.g.
-`/chat/completions` for OpenAI, `/v1/messages` for Anthropic).  Fava's
-extension endpoints use single-segment routes (`/<endpoint>`, no slashes).
-To bridge this:
-
-1. pi-ai `Model.baseUrl` is set to a sentinel domain (`https://favai-proxy.invalid`)
-2. A **global `fetch` shim** intercepts requests to the sentinel domain,
-   rewrites them to the favai `llm_proxy` extension endpoint, and puts the
-   original path in the `X-Favai-Upstream` header
-3. The backend proxy strips hop-by-hop headers, injects the real API key
-   (resolving `$ENV_VAR` references), and streams the upstream response bytes
-   back via `Flask.Response(stream_with_context(...), direct_passthrough=True)`
-
-### Security
-
-- API keys are stored in `.favai/config.json` next to the beancount file
-  (git-ignored).  `$ENV_VAR` references are recommended over literal keys.
-- The `to_public_dict()` method masks literal keys (`sk-****`) before sending
-  to the frontend.
-- **The browser never has access to the real API key** — the `llm_proxy`
-  endpoint injects it server-side.
-- Tools have no file-system or shell access (pure data-in/data-out).
-- BQL queries from the chat agent are read-only by construction (Beancount
-  BQL has no write statements).
-
-### Configuration
-
-favai stores its config in `.favai/` next to the beancount file (one
-`config.json` only — no `models.json` since there is no pi subprocess).
-
-The `ProviderConfig` dataclass includes these fields:
-- `api` — `"openai-completions"` or `"anthropic-messages"`
-- `base_url` — API endpoint URL
-- `model` — model identifier
-- `api_key` — literal key or `$ENV_VAR` reference
-- `vision` — whether the model supports image inputs
-- `context_window` — max context window in tokens (default: 128000)
-- `max_tokens` — max output tokens (default: 16384)
-
-### OCR (Optional)
-
-favai uses **PaddleOCR** (PP-OCRv6, onnxruntime engine) for extracting text
-from uploaded bill images as a fallback for non-vision models. The OCR model
-is loaded lazily (once, thread-safe with double-checked locking) and reused
-across calls. Install with `pip install favai[ocr]`.
-
-### Style Isolation
-
-Fava provides only a JS channel for extensions (no separate CSS).  The frontend:
-- Inlines all CSS into `FavaAI.js` via `?inline` import
-- Injects a `<style data-favai>` element at runtime
-- Uses `.favai-root` scoping for all CSS variables and resets
-- Redirects all portals to the extension root element, not `<body>`
-
----
-
-## Build & Test Commands
-
-All commands use the `Makefile` at the project root:
-
-| Command | Description |
-|---------|-------------|
-| `make deps` | `uv sync` + `cd frontend && npm install` |
-| `make test` | Run pytest unit tests (`tests/ -q`) |
-| `make lint` | `ruff check` + `ruff format --check` on `src` and `tests` |
-| `make build` | Build the frontend bundle (`cd frontend && npm run build`) → overwrites `src/favai/FavaAI.js` |
-| `make dev` | Start fava (debug) + Vite watch (needs two terminals or `&`) |
-| `make run` | Serve `example/example.beancount` with fava |
-
-### Frontend build specifics
-- `vite.config.ts` builds in **lib mode** — single ES module output.
-- `cssCodeSplit: false` — everything inlined.
-- `inlineDynamicImports: true` — pi-ai's lazy SDK imports bundled inline.
-- `define: { "process.env.NODE_ENV": JSON.stringify("production") }` — inlines
-  `NODE_ENV` for runtime environment checks in dependencies.
-- `emptyOutDir: false` — preserves the Python package directory (never empties it).
-- `@tailwindcss/vite` plugin used for Tailwind CSS v4 integration.
-- `tsc --noEmit` runs before build (type-checking step in `npm run build`).
-- Output goes directly to `src/favai/FavaAI.js` (committed in git, ~1.5 MB).
-- CI checks: `make build && git diff --exit-code` ensures the built JS matches source.
-
----
-
-## Testing Strategy
-
-- **Pure Python unit tests** (no fava instance, no file system side effects for most tests).
-- Tests are in `tests/` and mirror the module structure (`test_config.py` → `favai.config`).
-- **pytest** is the test runner. Tests use:
-  - `tmp_path` fixture for temporary config files
-  - `monkeypatch` for mocking httpx and env vars in proxy tests
-  - `@pytest.mark.parametrize` for validation test tables
-- No frontend unit tests yet (only the CI build-idempotency check).
-- E2E testing uses a Python stub server (`/tmp/openai_stub.py`) + agent-browser.
-
-### Running a single test
-```bash
-uv run pytest tests/test_config.py -q
-uv run pytest tests/test_proxy.py::test_openai_auth_header
+```text
+feature/*, fix/*, docs/*, or codex/*
+  -> pull request to main
+  -> CI passes
+  -> owner review/approval
+  -> merge to main
+  -> no package release unless the project version was intentionally bumped
 ```
 
----
+## CI and Release Workflow
 
-## Code Style & Conventions
+### Pull-request CI
+
+`.github/workflows/ci.yml` runs for every PR to `main`. It installs frontend
+dependencies, rebuilds and verifies the committed frontend bundle, runs Python
+tests and Ruff, builds the wheel and source distribution, and validates package
+metadata. Do not weaken, skip, or work around these checks.
+
+### Ordinary changes
+
+Documentation, tests, refactors, and features that are not releases must keep
+`project.version` in `pyproject.toml` unchanged. In particular, README-only or
+AGENTS.md-only PRs must not bump the version and therefore must not publish a
+new package.
+
+### Publishing a release
+
+Releases must use a dedicated `release/*` branch and PR:
+
+1. Decide the next semantic version with the repository owner.
+2. Update `project.version` in `pyproject.toml` and include all intended release
+   notes or metadata in the same release PR.
+3. Run the normal checks, push the release branch, and open a PR to `main`.
+4. Wait for CI and owner review. A coding agent must not merge the release PR
+   without an explicit instruction for that specific PR.
+5. After the reviewed PR is merged, `.github/workflows/publish.yml` builds the
+   wheel and sdist, publishes them to PyPI through Trusted Publishing, creates
+   the `v<version>` Git tag, and creates a GitHub Release with the artifacts.
+6. Confirm the workflow, PyPI version, Git tag, and GitHub Release all succeeded.
+
+The current workflow is path-triggered by changes to `pyproject.toml`, while
+the version is the package identity checked by PyPI. Therefore, do not edit
+`pyproject.toml` casually: combine non-release metadata changes with the next
+intentional version bump, or update the workflow first if different release
+semantics are required. Never retry publishing an existing version; bump the
+version through another reviewed release PR.
+
+## Build and Test Commands
+
+| Command | Purpose |
+| --- | --- |
+| `make deps` | Install Python and frontend dependencies |
+| `make test` | Run Python tests |
+| `make lint` | Run Ruff checks |
+| `make build` | Type-check and rebuild the frontend bundle |
+| `uv build` | Build wheel and source distribution |
+| `uvx twine check dist/*` | Validate package metadata |
+| `make dev` | Run Fava and the frontend watcher for development |
+| `make run` | Serve the example ledger |
+
+Run checks relevant to the change before pushing. Frontend changes require
+`make build`, and the generated `src/favai/FavaAI.js` must be committed with
+the source changes. Never edit that generated file by hand.
+
+## Code Conventions
 
 ### Python
-- **Python 3.13+** — uses `from __future__ import annotations` (PEP 604 syntax everywhere).
-- **Ruff** for linting and formatting (configured in `pyproject.toml`). Run `make lint` to check.
-- Import order: standard library → third-party → first-party.
-- Error messages in **Chinese** (用户面消息) for most user-facing strings; technical/protocol errors in English.
-- Custom exceptions: `ConfigError`, `ProxyError`, `EntryError` (all inherit `ValueError`).
-- `api_response` decorator wraps JSON endpoints with `{success: true, data}` / `{success: false, error}`.
-  The `llm_proxy` endpoint does **not** use `api_response` — it returns the upstream response raw.
-- `from __future__ import annotations` is the first import in every module.
-- OCR module (`ocr.py`) uses lazy-init with double-checked locking for thread-safe model loading.
 
-### TypeScript / Frontend
-- **Strict TypeScript** (`noUnusedLocals`, `noUnusedParameters`, `strict`, `verbatimModuleSyntax`).
-- React 19 idioms (no class components, no deprecated lifecycle methods).
-- CSS scoped under `.favai-root` — never add bare selectors or `:root` variables.
-- i18n via a simple `t()` function with two dictionaries (zh-CN + en). New UI strings must be added to both dictionaries.
-- Tool `execute` functions must **throw** on error (agent catches and reports as `isError`).
-  Do not return error messages as content.
-- Agent transcript is the single source of truth for chat messages — `toChatMessages()`
-  derives the Chat UI `Message[]` shape from `agent.state.messages` (no manual mirroring).
+- Use `from __future__ import annotations`, modern type hints, and Ruff.
+- Keep imports ordered standard library, third-party, then first-party.
+- User-facing errors are generally Chinese; protocol errors may be English.
+- Preserve the raw streaming behavior of `llm_proxy`; JSON endpoints use the
+  existing `api_response` response shape.
 
-### Project-specific Conventions
-- The built `src/favai/FavaAI.js` is committed to git. Do **not** edit it by hand — always `make build`.
-- All `Edit`-like operations on the proposal pass through pure functions that produce new immutable arrays.
-- The Python package is a flat namespace (`favai.*`); no nested subpackages.
+### TypeScript and React
 
----
+- Keep strict TypeScript clean, including unused-symbol checks.
+- Add new UI strings to both zh-CN and English dictionaries.
+- Keep CSS under `.favai-root`; do not add global resets or `:root` variables.
+- Tool `execute` functions must throw on failure so the agent records an error.
+- Treat the agent transcript as the source of truth for displayed messages.
+- Use immutable updates for proposal edits.
 
-## Dependencies & Tools Required
+## Known Constraints
 
-### Runtime (end user)
-- **Python >= 3.13** with **fava >= 1.30.14** and **httpx >= 0.27**
-- LLM provider (any OpenAI-compatible or Anthropic-compatible API)
-- No Node.js or `pi` runtime needed.
-- OCR: optional, `pip install favai[ocr]` installs PaddleOCR + onnxruntime.
-
-### Development
-- `uv` (Python package manager)
-- `Node.js >= 18` and `npm` (for developing the frontend bundle)
-- `pytest`, `ruff` (installed via uv dev deps)
-- `agent-browser` (npm) for E2E testing with browser automation
-- A beancount file with `2026-01-01 custom "fava-extension" "favai"` to load the extension
-
----
-
-## Data Flow
-
-### Import flow (via unified agent)
-
-```
-Browser (FavaAI.js)
-  │ User pastes text / uploads files
-  ▼
-1. POST /ingest (multipart) → ingest.py classifies files, returns texts + images
-  │
-2. Build prompt from #ledger-data (accounts, currencies, payees) + ingest result
-  │
-3. createUnifiedAgent(config, onProposal)
-   └─ pi-agent-core Agent + propose_transactions, bql_query, today tools
-  │
-4. agent.prompt(prompt, images)
-   └─ pi-ai builds provider request → fetch shim rewrites to /llm_proxy
-      └─ backend proxy forwards to user-configured LLM, injects API key
-         └─ pi-ai SDK processes streaming SSE → agent detects tool call
-            └─ propose_transactions.execute() calls onProposal(transactions)
-  │
-5. Proposal table populates → user edits or sends feedback
-  │
-6. User clicks "Confirm & write"
-   └─ POST /import_confirm ({transactions})
-      └─ to_fava_entries() → deserialise() → ledger.file.insert_entries()
-
-User clicks "Discard"
-   └─ agent.reset() + reset state (no backend call needed)
-```
-
-### Chat flow (via unified agent)
-
-```
-Browser (FavaAI.js)
-  │ User types a question (no files attached)
-  ▼
-1. Agent system prompt set to UNIFIED_SYSTEM_PROMPT
-  │
-2. agent.prompt(question)
-   └─ pi-ai → llm_proxy → LLM → tool_call: bql_query or today
-      └─ bql_query.execute() → fetch /<slug>/api/query/?query_string=...
-         → flattenTable() → result text
-      └─ today.execute() → current date string
-   └─ Agent sends tool result back to LLM → LLM summarises → text_delta events
-  │
-3. Streaming text rendered in UnifiedChat via agent.subscribe + toChatMessages()
-```
-
----
-
-## Limitations & Notes
-
-- **Token consumption**: The full account tree is injected into every import prompt.
-  Very large ledgers may consume significant token budgets.
-- **PDF**: Only text-layer PDFs are supported. Scanned PDFs produce a warning
-  suggesting screenshots instead.
-- **Fetch shim is global**: The sentinel-domain `fetch` wrapper is installed at
-  module load time. Only requests to `https://favai-proxy.invalid` are intercepted;
-  all other `fetch` calls pass through unchanged.
-- **Chat history**: Agent state is in browser memory only; refresh clears the
-  conversation. Persistence to `.favai/sessions/` is a future enhancement.
-- The `.favai/` directory (next to the beancount file) is git-ignored.
+- Large account trees increase prompt token usage.
+- Text-layer PDFs are supported; scanned PDFs should be supplied as images.
+- Conversation history is browser-memory-only and is cleared on refresh.
+- The global fetch shim must intercept only `https://favai-proxy.invalid`.
