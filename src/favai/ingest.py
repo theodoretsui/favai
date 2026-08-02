@@ -39,7 +39,9 @@ def _pdf_text(data: BinaryIO) -> str:
     return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
-def ingest_file(filename: str, data: bytes, result: IngestResult) -> None:
+def ingest_file(
+    filename: str, data: bytes, result: IngestResult, *, vision: bool
+) -> None:
     """Classify one upload and add it to the ingest result."""
     lower = filename.lower()
     suffix = "." + lower.rsplit(".", 1)[-1] if "." in lower else ""
@@ -49,8 +51,9 @@ def ingest_file(filename: str, data: bytes, result: IngestResult) -> None:
         result.images.append(
             {"data": base64.b64encode(data).decode(), "mimeType": image_mime}
         )
-        # Run OCR to extract text for non-vision models
-        if ocr_available():
+        # Vision-capable models receive the original image directly.  Avoid
+        # invoking OCR in that case: it adds latency and duplicates context.
+        if not vision and ocr_available():
             try:
                 ocr_text = _paddle_ocr(data)
             except Exception as exc:  # noqa: BLE001 - surfaced as a warning
@@ -85,15 +88,15 @@ def ingest_file(filename: str, data: bytes, result: IngestResult) -> None:
 
 
 def ingest_uploads(
-    files: list[tuple[str, bytes]], pasted_text: str = ""
+    files: list[tuple[str, bytes]], pasted_text: str = "", *, vision: bool = False
 ) -> IngestResult:
     """Ingest all uploads plus an optional pasted text snippet."""
     result = IngestResult()
     if pasted_text.strip():
         result.texts.append(f"--- 用户粘贴的账单文本 ---\n{pasted_text.strip()}")
     for filename, data in files:
-        ingest_file(filename, data, result)
-    if result.images and not ocr_available():
+        ingest_file(filename, data, result, vision=vision)
+    if result.images and not vision and not ocr_available():
         result.warnings.append(
             "检测到图片但未安装 OCR 引擎："
             "非 vision 模型将无法读取图片内容。"

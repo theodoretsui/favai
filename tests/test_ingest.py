@@ -68,6 +68,19 @@ def test_image_ocr_success(monkeypatch):
     assert "海底捞" in result.texts[0]
 
 
+def test_vision_image_skips_ocr(monkeypatch):
+    ocr = Mock()
+    monkeypatch.setattr("favai.ingest.ocr_available", Mock(return_value=True))
+    monkeypatch.setattr("favai.ingest._paddle_ocr", ocr)
+
+    result = ingest_uploads([("receipt.png", _valid_png())], vision=True)
+
+    assert len(result.images) == 1
+    assert not result.texts
+    assert not result.warnings
+    ocr.assert_not_called()
+
+
 def test_image_ocr_no_text(monkeypatch):
     """OCR returning None (no text detected) is not a warning."""
     monkeypatch.setattr("favai.ingest.ocr_available", lambda: True)

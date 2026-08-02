@@ -118,12 +118,13 @@ export const api = {
   status: () => request<Status>("status"),
   getConfig: () => request<Config>("config"),
   saveConfig: (config: Config) => postJson<Config>("config", config),
-  ingest: (files: File[], text: string) => {
+  ingest: (files: File[], text: string, vision: boolean) => {
     const form = new FormData();
     for (const file of files) {
       form.append("files", file, file.name);
     }
     form.append("text", text);
+    form.append("vision", String(vision));
     return request<IngestResult>("ingest", {
       method: "POST",
       body: form,

@@ -291,7 +291,7 @@ export function UnifiedChat({
         // Import mode: ingest files, build import prompt.
         setIsProcessing(true);
         try {
-          const ingestResult = await api.ingest(files ?? [], "");
+          const ingestResult = await api.ingest(files ?? [], "", config.vision);
           for (const warning of ingestResult.warnings) {
             toast.warning(`${t("warning.title")}: ${warning}`);
           }
@@ -335,9 +335,13 @@ export function UnifiedChat({
           ],
         });
       } else {
+        const imageContents = images.map((image) => ({
+          type: "image" as const,
+          ...image,
+        }));
         await agent.prompt(
           currentInput,
-          images.length > 0 ? (images as never) : undefined,
+          imageContents.length > 0 ? imageContents : undefined,
         );
       }
 

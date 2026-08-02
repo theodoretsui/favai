@@ -162,7 +162,7 @@ export function ImportTab({
 
     try {
       // 1. Ingest
-      const ingestResult = await api.ingest(files, text.trim());
+      const ingestResult = await api.ingest(files, text.trim(), config.vision);
       showWarnings(ingestResult.warnings);
 
       // 2. Build prompt with current date

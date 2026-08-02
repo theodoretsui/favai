@@ -1,6 +1,6 @@
 PYTHON := uv run
 
-.PHONY: deps build test lint dev run
+.PHONY: deps build test test-e2e lint dev run
 
 deps: ## Install Python (with OCR extra) and frontend dependencies
 	uv sync --extra ocr
@@ -12,9 +12,12 @@ build: ## Build the frontend bundle into src/favai/FavaAI.js
 test: ## Run Python unit tests
 	$(PYTHON) pytest tests/ -q
 
+test-e2e: build ## Run browser E2E tests (requires agent-browser)
+	bash e2e/test_pure_image_thumbnail.sh
+
 lint: ## Ruff lint + format check
-	$(PYTHON) ruff check src tests
-	$(PYTHON) ruff format --check src tests
+	$(PYTHON) ruff check src tests e2e/openai_stub.py
+	$(PYTHON) ruff format --check src tests e2e/openai_stub.py
 
 run: ## Serve the example ledger
 	$(PYTHON) fava example/example.beancount -p 5500

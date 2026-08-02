@@ -205,7 +205,8 @@ class FavaAI(FavaExtensionBase):
             for upload in request.files.getlist("files")
         ]
         pasted = request.form.get("text", "")
-        result = ingest_uploads(files, pasted)
+        vision = request.form.get("vision", "false").lower() == "true"
+        result = ingest_uploads(files, pasted, vision=vision)
         return {
             "texts": result.texts,
             "images": result.images,

@@ -66,16 +66,33 @@ function toChatMessage(
 ): Message {
   if (msg.role === "user") {
     const ingestTexts: string[] = [];
+    const attachments: NonNullable<Message["experimental_attachments"]> = [];
     let visibleText = "";
     if (typeof msg.content === "string") {
       visibleText = msg.content;
     } else {
       for (const block of msg.content) {
-        if (block.type !== "text") continue;
-        if (block.text.startsWith(INGEST_BLOCK_PREFIX)) {
-          ingestTexts.push(block.text.slice(INGEST_BLOCK_PREFIX.length));
+        if (block.type === "text") {
+          if (block.text.startsWith(INGEST_BLOCK_PREFIX)) {
+            ingestTexts.push(block.text.slice(INGEST_BLOCK_PREFIX.length));
+          } else {
+            visibleText += block.text;
+          }
         } else {
-          visibleText += block.text;
+          // Older pure-image prompts were persisted without the `type` field.
+          // Accept that shape so existing sessions also regain thumbnails.
+          const imageBlock = block as {
+            type?: string;
+            data?: string;
+            mimeType?: string;
+          };
+          if (!imageBlock.data || !imageBlock.mimeType) continue;
+          const imageNumber = attachments.length + 1;
+          attachments.push({
+            name: `image-${imageNumber}`,
+            contentType: imageBlock.mimeType,
+            url: `data:${imageBlock.mimeType};base64,${imageBlock.data}`,
+          });
         }
       }
     }
@@ -85,6 +102,7 @@ function toChatMessage(
       content: visibleText,
       createdAt: new Date(msg.timestamp),
       ingestTexts: ingestTexts.length > 0 ? ingestTexts : undefined,
+      experimental_attachments: attachments.length > 0 ? attachments : undefined,
     };
   }
 

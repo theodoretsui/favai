@@ -290,8 +290,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
 function dataUrlToUint8Array(data: string) {
   const base64 = data.split(",")[1]
-  const buf = Buffer.from(base64, "base64")
-  return new Uint8Array(buf)
+  if (!base64) return new Uint8Array()
+  const binary = atob(base64)
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0))
 }
 
 const ReasoningBlock = ({ part }: { part: ReasoningPart }) => {
