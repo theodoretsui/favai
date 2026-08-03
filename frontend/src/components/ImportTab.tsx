@@ -17,6 +17,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   MessageScroller,
@@ -34,6 +41,7 @@ import type { Agent } from "@earendil-works/pi-agent-core";
 
 const ACCEPT =
   ".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.pdf";
+const DEFAULT_WRITE_PATH = "__fava_default__";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -86,6 +94,7 @@ export function ImportTab({
     null,
   );
   const [accounts, setAccounts] = useState<string[]>([]);
+  const [writePath, setWritePath] = useState(DEFAULT_WRITE_PATH);
   const agentRef = useRef<Agent | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -311,7 +320,11 @@ export function ImportTab({
       return;
     }
     try {
-      const result = await api.importConfirm(transactions);
+      const result = await api.importConfirm(
+        transactions,
+        undefined,
+        writePath === DEFAULT_WRITE_PATH ? undefined : writePath,
+      );
       toast.success(t("confirm.success", { count: result.inserted }));
       reset();
     } catch (err) {
@@ -536,7 +549,31 @@ export function ImportTab({
         )}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-end gap-2">
+        {status && status.source_files.length > 0 && (
+          <div className="flex min-w-64 flex-col gap-1">
+            <label className="text-xs text-muted-foreground">
+              {t("confirm.write.path")}
+            </label>
+            <Select value={writePath} onValueChange={setWritePath}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={DEFAULT_WRITE_PATH}>
+                  {t("confirm.write.default", {
+                    path: status.default_write_path,
+                  })}
+                </SelectItem>
+                {status.source_files.map((path) => (
+                  <SelectItem key={path} value={path}>
+                    {path}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <Button
           onClick={confirm}
           disabled={waiting || !transactions || transactions.length === 0}

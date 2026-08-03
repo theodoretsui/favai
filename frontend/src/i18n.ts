@@ -63,6 +63,8 @@ const zhCN = {
   "proposal.date": "日期",
   "proposal.payee": "收款方",
   "proposal.narration": "摘要",
+  "proposal.tags": "标签",
+  "proposal.tags.placeholder": "#food #reimbursable",
   "proposal.account": "账户",
   "proposal.amount": "金额",
   "proposal.currency": "货币",
@@ -74,6 +76,8 @@ const zhCN = {
   "account.search.placeholder": "搜索或输入新账户…",
   "account.empty": "没有匹配的账户",
 
+  "confirm.write.path": "写入文件",
+  "confirm.write.default": "Fava 默认（{path}）",
   "confirm.submit": "确认写入",
   "confirm.success": "已写入 {count} 条交易",
   "discard.submit": "放弃",
@@ -124,6 +128,7 @@ const zhCN = {
   "import.validation.accountEmpty": "第 {index} 笔交易的分录缺少账户",
   "import.validation.accountInvalid": "第 {index} 笔交易使用了不存在的账户：{account}",
   "import.validation.amountFormatInvalid": "第 {index} 笔交易的金额格式无效：{amount}",
+  "import.validation.tagInvalid": "第 {index} 笔交易的标签格式无效：{tag}",
   "import.validation.multipleUnspecified": "第 {index} 笔交易有多条分录缺少金额",
   "import.validation.unbalanced": "第 {index} 笔交易金额不平衡（{currency} 差额 {difference}）",
 } as const;
@@ -189,6 +194,8 @@ const en: Record<I18nKey, string> = {
   "proposal.date": "Date",
   "proposal.payee": "Payee",
   "proposal.narration": "Narration",
+  "proposal.tags": "Tags",
+  "proposal.tags.placeholder": "#food #reimbursable",
   "proposal.account": "Account",
   "proposal.amount": "Amount",
   "proposal.currency": "Currency",
@@ -200,6 +207,8 @@ const en: Record<I18nKey, string> = {
   "account.search.placeholder": "Search or type a new account…",
   "account.empty": "No matching account",
 
+  "confirm.write.path": "Write to",
+  "confirm.write.default": "Fava default ({path})",
   "confirm.submit": "Confirm & write",
   "confirm.success": "Inserted {count} transaction(s)",
   "discard.submit": "Discard",
@@ -250,6 +259,7 @@ const en: Record<I18nKey, string> = {
   "import.validation.accountEmpty": "Transaction {index} has a posting without an account",
   "import.validation.accountInvalid": "Transaction {index} uses a non-existent account: {account}",
   "import.validation.amountFormatInvalid": "Transaction {index} has an invalid amount: {amount}",
+  "import.validation.tagInvalid": "Transaction {index} has an invalid tag: {tag}",
   "import.validation.multipleUnspecified": "Transaction {index} has multiple postings without amounts",
   "import.validation.unbalanced": "Transaction {index} is unbalanced ({currency} difference: {difference})",
 };

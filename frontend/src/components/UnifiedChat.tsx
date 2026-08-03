@@ -40,6 +40,8 @@ interface ModelChoice {
   model: string;
 }
 
+const DEFAULT_WRITE_PATH = "__fava_default__";
+
 function modelChoiceValue(choice: ModelChoice): string {
   return JSON.stringify([choice.provider, choice.model]);
 }
@@ -71,6 +73,7 @@ export function UnifiedChat({
     null,
   );
   const [accounts, setAccounts] = useState<string[]>([]);
+  const [writePath, setWritePath] = useState(DEFAULT_WRITE_PATH);
   const [providerConfigs, setProviderConfigs] = useState<Config[]>([]);
   const [models, setModels] = useState<ModelChoice[]>([]);
   const [selectedProvider, setSelectedProvider] = useState("");
@@ -472,7 +475,11 @@ export function UnifiedChat({
   async function confirm() {
     if (!transactions) return;
     try {
-      const result = await api.importConfirm(transactions, currentSession?.id);
+      const result = await api.importConfirm(
+        transactions,
+        currentSession?.id,
+        writePath === DEFAULT_WRITE_PATH ? undefined : writePath,
+      );
       toast.success(t("confirm.success", { count: result.inserted }));
       replaceDirty(false);
       replacePendingProposal(null);
@@ -661,7 +668,31 @@ export function UnifiedChat({
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-end gap-2">
+            {status && status.source_files.length > 0 && (
+              <div className="flex min-w-64 flex-col gap-1">
+                <label className="text-xs text-muted-foreground">
+                  {t("confirm.write.path")}
+                </label>
+                <Select value={writePath} onValueChange={setWritePath}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEFAULT_WRITE_PATH}>
+                      {t("confirm.write.default", {
+                        path: status.default_write_path,
+                      })}
+                    </SelectItem>
+                    {status.source_files.map((path) => (
+                      <SelectItem key={path} value={path}>
+                        {path}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <Button
               onClick={confirm}
               disabled={isGenerating || transactions.length === 0}

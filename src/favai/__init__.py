@@ -20,7 +20,7 @@ from favai.config import (
     public_configs,
     save_config,
 )
-from favai.entries import to_fava_entries
+from favai.entries import source_file_options, to_fava_entries, write_entries
 from favai.history import (
     HistoryError,
     archive_session,
@@ -114,7 +114,13 @@ class FavaAI(FavaExtensionBase):
             configured = True
         except ConfigError:
             configured = False
-        return {"configured": configured, "ocr_available": ocr_available()}
+        source_files, default_write_path = source_file_options(self.ledger)
+        return {
+            "configured": configured,
+            "ocr_available": ocr_available(),
+            "source_files": source_files,
+            "default_write_path": default_write_path,
+        }
 
     @extension_endpoint("config", ["GET", "POST"])
     @api_response
@@ -302,8 +308,9 @@ class FavaAI(FavaExtensionBase):
         from fava.serialisation import deserialise
 
         entries = [deserialise(entry) for entry in entries_json]
-        self.ledger.file.insert_entries(entries)
+        write_path = str(payload.get("write_path") or "").strip() or None
+        write_entries(self.ledger, entries, write_path)
         session_id = payload.get("session_id")
         if session_id:
             mark_confirmed(self.data_dir, session_id, count=len(entries))
-        return {"inserted": len(entries)}
+        return {"inserted": len(entries), "write_path": write_path}

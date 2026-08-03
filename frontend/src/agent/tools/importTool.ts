@@ -28,7 +28,13 @@ const TransactionSchema = Type.Object({
     minItems: 2,
     description: "至少两条分录，其中至多一条可以缺少金额（配平分录）",
   }),
-  tags: Type.Optional(Type.Array(Type.String())),
+  tags: Type.Optional(
+    Type.Array(
+      Type.String({
+        description: "Beancount 标签，不含 # 前缀，如 food、reimbursable",
+      }),
+    ),
+  ),
   links: Type.Optional(Type.Array(Type.String())),
 });
 
@@ -41,6 +47,7 @@ const ProposeParams = Type.Object({
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const AMOUNT_RE = /^-?\d+(\.\d+)?$/;
+const TAG_RE = /^[A-Za-z0-9._/-]+$/;
 
 interface DecimalValue {
   int: bigint;
@@ -79,6 +86,12 @@ function validateTransaction(
 
   if (!DATE_RE.test(txn.date)) {
     errors.push(t("import.validation.dateInvalid", { index: i, date: txn.date }));
+  }
+
+  for (const tag of txn.tags ?? []) {
+    if (!TAG_RE.test(tag)) {
+      errors.push(t("import.validation.tagInvalid", { index: i, tag }));
+    }
   }
 
   const postings = txn.postings ?? [];
@@ -168,7 +181,10 @@ export function makeImportTool(
       "提交从账单材料中提取的交易，每笔交易包含日期、摘要和至少两条会计录。",
     parameters: ProposeParams,
     execute: async (_toolCallId, params, _signal) => {
-      const txns = params.transactions as Transaction[];
+      const txns = (params.transactions as Transaction[]).map((txn) => ({
+        ...txn,
+        tags: txn.tags?.map((tag) => tag.trim().replace(/^#/, "")),
+      }));
       const { accounts } = getLedgerData();
       const accountSet = new Set(accounts);
 
