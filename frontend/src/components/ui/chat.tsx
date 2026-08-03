@@ -21,7 +21,7 @@ export { type Message } from "@/components/ui/chat-message"
 interface ChatProps {
   messages: Message[]
   input: string
-  handleInputChange: React.ChangeEventHandler<HTMLTextAreaElement>
+  handleInputChange: (value: string) => void
   handleSubmit: (event?: { preventDefault?: () => void }) => void
   isGenerating: boolean
   isProcessing?: boolean
@@ -117,7 +117,8 @@ export function Chat({
       <ChatForm className="mt-auto" handleSubmit={handleSubmit}>
         <MessageInput
           value={input}
-          onChange={handleInputChange}
+          onValueChange={handleInputChange}
+          onSubmit={() => handleSubmit()}
           placeholder={placeholder}
           allowAttachments={allowAttachments}
           files={files ?? null}

@@ -462,10 +462,8 @@ export function UnifiedChat({
     }
   }
 
-  function handleInputChange(
-    e: React.ChangeEvent<HTMLTextAreaElement>,
-  ) {
-    setInput(e.target.value);
+  function handleInputChange(value: string) {
+    setInput(value);
   }
 
   function abort() {
