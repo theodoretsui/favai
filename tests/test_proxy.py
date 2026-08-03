@@ -7,6 +7,9 @@ tests.  Here we test the internal helper functions in isolation.
 
 from __future__ import annotations
 
+from unittest.mock import Mock
+
+import httpx
 import pytest
 
 from favai.config import ProviderConfig
@@ -15,6 +18,7 @@ from favai.proxy import (
     ProxyError,
     _build_upstream_headers,
     _resolve_key,
+    forward_llm,
 )
 
 # ---------------------------------------------------------------------------
@@ -213,3 +217,29 @@ def test_hop_by_hop_headers_stripped(monkeypatch):
         assert h not in lower_headers, f"{h} should be stripped"
     # The real Authorization was re-injected
     assert lower_headers.get("authorization") == "Bearer k"
+
+
+def test_forward_llm_reports_connection_error_and_closes_client(monkeypatch):
+    client = Mock()
+    request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    client.build_request.return_value = request
+    client.send.side_effect = httpx.ConnectError(
+        "TLS handshake failed", request=request
+    )
+    monkeypatch.setattr("favai.proxy.httpx.Client", Mock(return_value=client))
+
+    config = ProviderConfig(
+        base_url="https://example.test/v1",
+        model="test-model",
+        api_key="test-key",
+    )
+
+    with pytest.raises(ProxyError, match="连接 LLM 服务失败.*TLS handshake failed"):
+        forward_llm(
+            config,
+            "/chat/completions",
+            b"{}",
+            {"content-type": "application/json"},
+        )
+
+    client.close.assert_called_once_with()

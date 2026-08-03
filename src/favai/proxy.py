@@ -126,8 +126,12 @@ def forward_llm(
     content_type_from_req = upstream_headers.get("content-type", "application/json")
 
     client = httpx.Client(timeout=httpx.Timeout(300.0, connect=10.0))
-    req = client.build_request("POST", url, content=body, headers=upstream_headers)
-    upstream_resp = client.send(req, stream=True)
+    try:
+        req = client.build_request("POST", url, content=body, headers=upstream_headers)
+        upstream_resp = client.send(req, stream=True)
+    except httpx.HTTPError as exc:
+        client.close()
+        raise ProxyError(f"连接 LLM 服务失败：{exc}") from exc
     content_type = upstream_resp.headers.get("content-type", content_type_from_req)
 
     def generate() -> Generator[bytes]:
