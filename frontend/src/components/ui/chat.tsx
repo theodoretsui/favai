@@ -183,7 +183,10 @@ export const ChatContainer = forwardRef<
   return (
     <div
       ref={ref}
-      className={cn("grid h-full w-full grid-rows-[1fr_auto]", className)}
+      className={cn(
+        "grid min-h-0 w-full grid-rows-[minmax(0,1fr)_auto]",
+        className,
+      )}
       {...props}
     />
   )

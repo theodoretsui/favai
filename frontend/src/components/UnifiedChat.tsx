@@ -580,6 +580,7 @@ export function UnifiedChat({
             )}
           </div>
           <Chat
+            className="min-h-0 flex-1"
             messages={chatMessages}
             input={input}
             handleInputChange={handleInputChange}
