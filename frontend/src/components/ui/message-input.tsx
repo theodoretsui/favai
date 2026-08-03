@@ -1,250 +1,227 @@
 "use client"
 
 import React, { useRef, useState } from "react"
+import { Sender } from "@ant-design/x"
+import type { SenderRef } from "@ant-design/x/es/sender"
+import { ConfigProvider, Upload } from "antd"
 import { AnimatePresence, motion } from "framer-motion"
-import { ArrowUp, Paperclip, Square } from "lucide-react"
+import { Paperclip } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { t } from "@/i18n"
-import { useAutosizeTextArea } from "@/hooks/use-autosize-textarea"
 import { Button } from "@/components/ui/button"
 import { FilePreview } from "@/components/ui/file-preview"
 
-interface MessageInputBaseProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+const ACCEPTED_FILES = ".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.pdf"
+
+interface MessageInputProps {
   value: string
-  submitOnEnter?: boolean
+  onValueChange: (value: string) => void
+  onSubmit: () => void
   stop?: () => void
   isGenerating: boolean
-  enableInterrupt?: boolean
+  allowAttachments?: boolean
+  files?: File[] | null
+  setFiles?: React.Dispatch<React.SetStateAction<File[] | null>>
+  placeholder?: string
+  className?: string
 }
-
-interface MessageInputWithoutAttachmentProps extends MessageInputBaseProps {
-  allowAttachments?: false
-}
-
-interface MessageInputWithAttachmentsProps extends MessageInputBaseProps {
-  allowAttachments: true
-  files: File[] | null
-  setFiles: React.Dispatch<React.SetStateAction<File[] | null>>
-}
-
-type MessageInputProps =
-  | MessageInputWithoutAttachmentProps
-  | MessageInputWithAttachmentsProps
 
 export function MessageInput({
-  placeholder = t("chat.input.placeholder"),
-  className,
-  onKeyDown: onKeyDownProp,
-  submitOnEnter = true,
+  value,
+  onValueChange,
+  onSubmit,
   stop,
   isGenerating,
-  enableInterrupt = true,
-  ...props
+  allowAttachments = false,
+  files,
+  setFiles,
+  placeholder = t("chat.input.placeholder"),
+  className,
 }: MessageInputProps) {
   const [isDragging, setIsDragging] = useState(false)
+  const senderRef = useRef<SenderRef>(null)
+  const lastCompositionEndAtRef = useRef(Number.NEGATIVE_INFINITY)
 
-  const addFiles = (files: File[] | null) => {
-    if (props.allowAttachments) {
-      props.setFiles((currentFiles) => {
-        if (currentFiles === null) {
-          return files
-        }
+  const addFiles = (nextFiles: File[]) => {
+    if (!allowAttachments || !setFiles || nextFiles.length === 0) return
+    setFiles((currentFiles) => [...(currentFiles ?? []), ...nextFiles])
+  }
 
-        if (files === null) {
-          return currentFiles
-        }
+  const focusSender = () => {
+    senderRef.current?.focus({ preventScroll: true, cursor: "end" })
+  }
 
-        return [...currentFiles, ...files]
-      })
-    }
+  const focusSenderAfterPicker = () => {
+    window.requestAnimationFrame(focusSender)
   }
 
   const onDragOver = (event: React.DragEvent) => {
-    if (props.allowAttachments !== true) return
+    if (!allowAttachments) return
     event.preventDefault()
     setIsDragging(true)
   }
 
   const onDragLeave = (event: React.DragEvent) => {
-    if (props.allowAttachments !== true) return
+    if (!allowAttachments) return
     event.preventDefault()
     setIsDragging(false)
   }
 
   const onDrop = (event: React.DragEvent) => {
     setIsDragging(false)
-    if (props.allowAttachments !== true) return
+    if (!allowAttachments) return
     event.preventDefault()
-    const dataTransfer = event.dataTransfer
-    if (dataTransfer.files.length) {
-      addFiles(Array.from(dataTransfer.files))
-    }
+    addFiles(Array.from(event.dataTransfer.files))
   }
 
-  const onPaste = (event: React.ClipboardEvent) => {
-    const items = event.clipboardData?.items
-    if (!items) return
+  const onPaste = (event: React.ClipboardEvent<HTMLElement>) => {
+    if (!allowAttachments) return
 
     const text = event.clipboardData.getData("text")
-    if (text && text.length > 500 && props.allowAttachments) {
+    if (text.length > 500) {
       event.preventDefault()
-      const blob = new Blob([text], { type: "text/plain" })
-      const file = new File([blob], "Pasted text", {
-        type: "text/plain",
-        lastModified: Date.now(),
-      })
-      addFiles([file])
+      addFiles([
+        new File([text], "Pasted text", {
+          type: "text/plain",
+          lastModified: Date.now(),
+        }),
+      ])
       return
     }
 
-    const files = Array.from(items)
+    const pastedFiles = Array.from(event.clipboardData.items)
       .map((item) => item.getAsFile())
       .filter((file): file is File => file !== null)
 
-    if (props.allowAttachments && files.length > 0) {
-      addFiles(files)
-    }
+    if (pastedFiles.length > 0) addFiles(pastedFiles)
   }
 
-  const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (submitOnEnter && event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault()
-      event.currentTarget.form?.requestSubmit()
-    }
+  const showFileList = allowAttachments && files && files.length > 0
+  const canSubmit = value.length > 0 || Boolean(showFileList)
 
-    onKeyDownProp?.(event)
-  }
-
-  const textAreaRef = useRef<HTMLTextAreaElement>(null)
-
-  const showFileList =
-    props.allowAttachments && props.files && props.files.length > 0
-
-  useAutosizeTextArea({
-    ref: textAreaRef,
-    maxHeight: 240,
-    borderWidth: 1,
-    dependencies: [props.value, showFileList],
-  })
-
-  const hasValue = props.value !== undefined && props.value !== ""
+  const attachmentList = showFileList ? (
+    <div className="overflow-x-auto px-3 py-2">
+      <div className="flex space-x-3">
+        <AnimatePresence mode="popLayout">
+          {files.map((file) => (
+            <FilePreview
+              key={file.name + String(file.lastModified)}
+              file={file}
+              onRemove={() => {
+                setFiles?.((currentFiles) => {
+                  if (!currentFiles) return null
+                  const filtered = currentFiles.filter((item) => item !== file)
+                  return filtered.length > 0 ? filtered : null
+                })
+              }}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
+    </div>
+  ) : (
+    false
+  )
 
   return (
     <div
-      className="relative flex w-full"
+      className="relative w-full"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
+      onCompositionEndCapture={() => {
+        lastCompositionEndAtRef.current = performance.now()
+      }}
     >
-      <div className="relative flex w-full items-center space-x-2">
-        <div className="relative flex-1">
-          <textarea
-            aria-label="Write your prompt here"
-            placeholder={placeholder}
-            ref={textAreaRef}
-            onPaste={onPaste}
-            onKeyDown={onKeyDown}
-            className={cn(
-              "z-10 w-full grow resize-none rounded-xl border border-input bg-background p-3 pr-24 text-sm ring-offset-background transition-[border] placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
-              showFileList && "pb-16",
-              className,
-            )}
-            {...(props.allowAttachments
-              ? ((): {
-                  allowAttachments?: boolean
-                  files?: File[] | null
-                  setFiles?: React.Dispatch<
-                    React.SetStateAction<File[] | null>
+      <ConfigProvider
+        prefixCls="favai-root"
+        iconPrefixCls="favai-root-icon"
+        theme={{
+          token: {
+            colorPrimary: "var(--primary)",
+            colorText: "var(--foreground)",
+            colorTextPlaceholder: "var(--muted-foreground)",
+            colorBgContainer: "var(--background)",
+            colorBorder: "var(--border)",
+            borderRadius: 12,
+            fontFamily: "inherit",
+          },
+        }}
+      >
+        <Sender
+          ref={senderRef}
+          rootClassName={cn("favai-sender", className)}
+          value={value}
+          onChange={onValueChange}
+          onSubmit={onSubmit}
+          onCancel={stop}
+          onPaste={onPaste}
+          onKeyDown={(event) => {
+            // Safari can emit Enter immediately after compositionend.
+            // Remove this guard once ant-design/x#1732 ships.
+            const justFinishedComposition =
+              event.key === "Enter" &&
+              performance.now() - lastCompositionEndAtRef.current < 100
+
+            if (
+              event.nativeEvent.isComposing ||
+              event.nativeEvent.keyCode === 229 ||
+              justFinishedComposition
+            ) {
+              return false
+            }
+          }}
+          loading={isGenerating}
+          submitType="enter"
+          autoSize={{ minRows: 1, maxRows: 8 }}
+          placeholder={placeholder}
+          header={attachmentList}
+          suffix={(_originalNode, { components }) => {
+            const { LoadingButton, SendButton } = components
+            return (
+              <div className="flex items-center gap-2">
+                {allowAttachments && (
+                  <Upload
+                    accept={ACCEPTED_FILES}
+                    multiple
+                    showUploadList={false}
+                    beforeUpload={(file) => {
+                      addFiles([file])
+                      focusSenderAfterPicker()
+                      return Upload.LIST_IGNORE
+                    }}
                   >
-                  enableInterrupt?: boolean
-                  [key: string]: any
-                } => {
-                  const {
-                    allowAttachments: _a,
-                    files: _f,
-                    setFiles: _s,
-                    enableInterrupt: _e,
-                    ...rest
-                  } = props as any
-                  return rest
-                })()
-              : ((): { allowAttachments?: boolean; [key: string]: any } => {
-                  const { allowAttachments: _a, ...rest } = props as any
-                  return rest
-                })())}
-          />
-
-          {props.allowAttachments && (
-            <div className="absolute inset-x-3 bottom-0 z-20 overflow-x-auto pt-4 pb-2">
-              <div className="flex space-x-3">
-                <AnimatePresence mode="popLayout">
-                  {props.files?.map((file) => {
-                    return (
-                      <FilePreview
-                        key={file.name + String(file.lastModified)}
-                        file={file}
-                        onRemove={() => {
-                          props.setFiles((files) => {
-                            if (!files) return null
-
-                            const filtered = Array.from(files).filter(
-                              (f) => f !== file,
-                            )
-                            if (filtered.length === 0) return null
-                            return filtered
-                          })
-                        }}
-                      />
-                    )
-                  })}
-                </AnimatePresence>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      aria-label="Attach a file"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={focusSenderAfterPicker}
+                    >
+                      <Paperclip />
+                    </Button>
+                  </Upload>
+                )}
+                {isGenerating ? (
+                  <LoadingButton
+                    aria-label="Stop generating"
+                    disabled={!stop}
+                  />
+                ) : (
+                  <SendButton
+                    aria-label="Send message"
+                    disabled={!canSubmit}
+                  />
+                )}
               </div>
-            </div>
-          )}
-        </div>
-      </div>
+            )
+          }}
+        />
+      </ConfigProvider>
 
-      <div className="absolute right-3 top-3 z-20 flex gap-2">
-        {props.allowAttachments && (
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            aria-label="Attach a file"
-            onClick={async () => {
-              const files = await showFileUploadDialog()
-              addFiles(files)
-            }}
-          >
-            <Paperclip />
-          </Button>
-        )}
-        {isGenerating && stop ? (
-          <Button
-            type="button"
-            size="icon"
-            variant="destructive"
-            aria-label="Stop generating"
-            onClick={stop}
-          >
-            <Square className="animate-pulse" fill="currentColor" />
-          </Button>
-        ) : (
-          <Button
-            type="submit"
-            size="icon"
-            className="transition-opacity dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/85"
-            aria-label="Send message"
-            disabled={!hasValue && !(props.allowAttachments && props.files && props.files.length > 0) || isGenerating}
-          >
-            <ArrowUp />
-          </Button>
-        )}
-      </div>
-
-      {props.allowAttachments && <FileUploadOverlay isDragging={isDragging} />}
+      {allowAttachments && <FileUploadOverlay isDragging={isDragging} />}
     </div>
   )
 }
@@ -272,26 +249,4 @@ function FileUploadOverlay({ isDragging }: FileUploadOverlayProps) {
       )}
     </AnimatePresence>
   )
-}
-
-function showFileUploadDialog() {
-  const input = document.createElement("input")
-
-  input.type = "file"
-  input.multiple = true
-  input.accept = ".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.pdf"
-  input.click()
-
-  return new Promise<File[] | null>((resolve) => {
-    input.onchange = (e) => {
-      const files = (e.currentTarget as HTMLInputElement).files
-
-      if (files) {
-        resolve(Array.from(files))
-        return
-      }
-
-      resolve(null)
-    }
-  })
 }
