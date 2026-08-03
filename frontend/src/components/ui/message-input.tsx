@@ -1,9 +1,9 @@
 "use client"
 
-import React, { useRef, useState } from "react"
-import { Sender } from "@ant-design/x"
+import React, { useEffect, useRef, useState } from "react"
+import { Sender, XProvider } from "@ant-design/x"
 import type { SenderRef } from "@ant-design/x/es/sender"
-import { ConfigProvider, Upload } from "antd"
+import { theme as antTheme, Upload } from "antd"
 import { AnimatePresence, motion } from "framer-motion"
 import { Paperclip } from "lucide-react"
 
@@ -13,6 +13,28 @@ import { Button } from "@/components/ui/button"
 import { FilePreview } from "@/components/ui/file-preview"
 
 const ACCEPTED_FILES = ".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.pdf"
+const LIGHT_COLORS = {
+  background: "#ffffff",
+  border: "#ebebeb",
+  foreground: "#252525",
+  muted: "#f7f7f7",
+  mutedForeground: "#737373",
+  primary: "#006ca8",
+  primaryActive: "#005483",
+  primaryForeground: "#ffffff",
+  primaryHover: "#007fbd",
+}
+const DARK_COLORS = {
+  background: "#262626",
+  border: "#4d4d4d",
+  foreground: "#cccccc",
+  muted: "#333333",
+  mutedForeground: "#a6a6a6",
+  primary: "#5cc0ff",
+  primaryActive: "#3faeea",
+  primaryForeground: "#262626",
+  primaryHover: "#75c9ff",
+}
 
 interface MessageInputProps {
   value: string
@@ -40,8 +62,29 @@ export function MessageInput({
   className,
 }: MessageInputProps) {
   const [isDragging, setIsDragging] = useState(false)
+  const [isDark, setIsDark] = useState(
+    () =>
+      typeof document !== "undefined" &&
+      (document
+        .querySelector(".favai-root")
+        ?.classList.contains("dark") ??
+        false),
+  )
+  const containerRef = useRef<HTMLDivElement>(null)
   const senderRef = useRef<SenderRef>(null)
   const lastCompositionEndAtRef = useRef(Number.NEGATIVE_INFINITY)
+
+  useEffect(() => {
+    const root = containerRef.current?.closest(".favai-root")
+    if (!root) return
+
+    const syncTheme = () => setIsDark(root.classList.contains("dark"))
+    syncTheme()
+
+    const observer = new MutationObserver(syncTheme)
+    observer.observe(root, { attributeFilter: ["class"] })
+    return () => observer.disconnect()
+  }, [])
 
   const addFiles = (nextFiles: File[]) => {
     if (!allowAttachments || !setFiles || nextFiles.length === 0) return
@@ -99,6 +142,7 @@ export function MessageInput({
 
   const showFileList = allowAttachments && files && files.length > 0
   const canSubmit = value.length > 0 || Boolean(showFileList)
+  const colors = isDark ? DARK_COLORS : LIGHT_COLORS
 
   const attachmentList = showFileList ? (
     <div className="overflow-x-auto px-3 py-2">
@@ -126,6 +170,7 @@ export function MessageInput({
 
   return (
     <div
+      ref={containerRef}
       className="relative w-full"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -134,18 +179,38 @@ export function MessageInput({
         lastCompositionEndAtRef.current = performance.now()
       }}
     >
-      <ConfigProvider
+      <XProvider
         prefixCls="favai-root"
         iconPrefixCls="favai-root-icon"
         theme={{
+          algorithm: isDark ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
           token: {
-            colorPrimary: "var(--primary)",
-            colorText: "var(--foreground)",
-            colorTextPlaceholder: "var(--muted-foreground)",
-            colorBgContainer: "var(--background)",
-            colorBorder: "var(--border)",
-            borderRadius: 12,
+            colorPrimary: colors.primary,
+            colorPrimaryHover: colors.primaryHover,
+            colorPrimaryActive: colors.primaryActive,
+            colorPrimaryText: colors.primary,
+            colorText: colors.foreground,
+            colorTextPlaceholder: colors.mutedForeground,
+            colorTextDisabled: colors.mutedForeground,
+            colorBgBase: colors.background,
+            colorBgContainer: colors.background,
+            colorBgElevated: colors.background,
+            colorBgContainerDisabled: colors.muted,
+            colorBorder: colors.border,
+            colorBorderSecondary: colors.border,
+            colorFillSecondary: colors.muted,
+            borderRadius: 2,
+            borderRadiusLG: 4,
+            borderRadiusSM: 2,
+            controlHeight: 36,
             fontFamily: "inherit",
+          },
+          components: {
+            Sender: {
+              colorBgActionsDisabled: colors.muted,
+              colorBorderInput: colors.border,
+              colorTextActionsDisabled: colors.mutedForeground,
+            },
           },
         }}
       >
@@ -177,6 +242,17 @@ export function MessageInput({
           autoSize={{ minRows: 1, maxRows: 8 }}
           placeholder={placeholder}
           header={attachmentList}
+          styles={{
+            root: {
+              background: colors.background,
+              borderRadius: 4,
+              boxShadow: "none",
+            },
+            input: {
+              background: "transparent",
+              color: colors.foreground,
+            },
+          }}
           suffix={(_originalNode, { components }) => {
             const { LoadingButton, SendButton } = components
             return (
@@ -208,18 +284,33 @@ export function MessageInput({
                   <LoadingButton
                     aria-label="Stop generating"
                     disabled={!stop}
+                    shape="default"
+                    style={{
+                      borderRadius: "var(--radius)",
+                      fontSize: "1.25rem",
+                      height: "2.25rem",
+                      width: "2.25rem",
+                    }}
                   />
                 ) : (
                   <SendButton
                     aria-label="Send message"
                     disabled={!canSubmit}
+                    shape="default"
+                    style={{
+                      borderRadius: "var(--radius)",
+                      color: colors.primaryForeground,
+                      fontSize: "1.25rem",
+                      height: "2.25rem",
+                      width: "2.25rem",
+                    }}
                   />
                 )}
               </div>
             )
           }}
         />
-      </ConfigProvider>
+      </XProvider>
 
       {allowAttachments && <FileUploadOverlay isDragging={isDragging} />}
     </div>
