@@ -174,6 +174,9 @@ export function UnifiedChat({
     }
     agentRef.current = agent;
     const unsub = agent.subscribe(bump);
+    // Ref updates do not render on their own. Render once after restoring a
+    // session transcript so the first history click displays its messages.
+    bump();
     return () => {
       unsub();
       agent.abort();
