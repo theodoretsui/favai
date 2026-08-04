@@ -89,21 +89,23 @@ pip install "favai[ocr]"
 ### 1. Configure an LLM provider
 
 Click the gear icon (top-right) and enter:
-- Provider preset: OpenAI, Anthropic, OpenCode Zen, LiteLLM, DeepSeek, or Kimi Coding Plan
+- Provider name: any unique name for the endpoint
 - API type: `OpenAI Compatible` or `Anthropic Compatible`
 - Base URL: your endpoint (e.g. `https://api.openai.com/v1` or a custom proxy)
-- Model: the model identifier (e.g. `gpt-4o`, `claude-sonnet-4-6`)
+- Supported models: one or more model identifiers (e.g. `gpt-4o`, `claude-sonnet-4-6`)
 - API Key: a literal key or an `$ENV_VAR` reference (recommended)
 
-Use **Fetch models** to load the provider's model list. A model can also be
-selected above the chat before the first message. The selected model is stored
-with the session and cannot be changed after that session starts, which keeps
-multimodal message history compatible with the model that created it.
+Use **Fetch models** to load options from the provider's Models API, or type a
+model identifier directly into the multi-select and press Enter. Add another
+provider with the `+` button; delete a configured provider from its dropdown
+action. A model can be selected above the chat before the first message. The
+selected model is stored with the session and cannot be changed after that
+session starts, which keeps multimodal message history compatible with the
+model that created it.
 
 Provider settings are stored as a list in `.favai/config.json`.
-The **Test connection & save** action writes or replaces one provider only
-after its Models API succeeds. Every saved provider and its discovered models
-then appears in the new-session model selector.
+**Save** writes or replaces only the selected provider. Every saved provider
+and its selected model list then appears in the new-session model selector.
 
 ### 2. Import bills
 

@@ -1,31 +1,11 @@
-"""Tests for built-in providers and model discovery."""
+"""Tests for provider model discovery."""
 
 from __future__ import annotations
 
 from unittest.mock import Mock
 
 from favai.config import ProviderConfig
-from favai.providers import list_provider_models, provider_presets
-
-
-def test_required_provider_presets_are_available():
-    assert {preset["id"] for preset in provider_presets()} == {
-        "openai",
-        "anthropic",
-        "opencode-zen",
-        "litellm",
-        "deepseek",
-        "kimi-coding",
-    }
-
-
-def test_kimi_coding_uses_official_openai_compatible_endpoint():
-    kimi = next(
-        preset for preset in provider_presets() if preset["id"] == "kimi-coding"
-    )
-    assert kimi["api"] == "openai-completions"
-    assert kimi["base_url"] == "https://api.kimi.com/coding/v1"
-    assert kimi["model"] == "kimi-for-coding"
+from favai.providers import list_provider_models
 
 
 def test_openai_model_discovery(monkeypatch):

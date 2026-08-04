@@ -10,6 +10,24 @@ from typing import Any
 
 
 class Handler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        if self.path.rstrip("/") != "/models":
+            self.send_error(404)
+            return
+        body = json.dumps(
+            {
+                "data": [
+                    {"id": "e2e-vision-model"},
+                    {"id": "e2e-text-model"},
+                ]
+            }
+        ).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length", "0"))
         payload = json.loads(self.rfile.read(length))

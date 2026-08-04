@@ -1,74 +1,11 @@
-"""Built-in LLM provider presets and model discovery."""
+"""LLM provider model discovery."""
 
 from __future__ import annotations
-
-from dataclasses import asdict, dataclass
-from typing import Any
 
 import httpx
 
 from favai.config import ProviderConfig
 from favai.proxy import ProxyError, _build_upstream_headers
-
-
-@dataclass(frozen=True)
-class ProviderPreset:
-    """A quick-start configuration for a commonly used provider."""
-
-    id: str
-    name: str
-    api: str
-    base_url: str
-    model: str = ""
-    vision: bool = False
-
-
-PROVIDER_PRESETS = (
-    ProviderPreset(
-        "openai",
-        "OpenAI",
-        "openai-completions",
-        "https://api.openai.com/v1",
-        "gpt-4.1",
-        True,
-    ),
-    ProviderPreset(
-        "anthropic",
-        "Anthropic",
-        "anthropic-messages",
-        "https://api.anthropic.com",
-        "claude-sonnet-4-6",
-        True,
-    ),
-    ProviderPreset(
-        "opencode-zen",
-        "OpenCode Zen",
-        "openai-completions",
-        "https://opencode.ai/zen/v1",
-    ),
-    ProviderPreset(
-        "litellm", "LiteLLM", "openai-completions", "http://localhost:4000/v1"
-    ),
-    ProviderPreset(
-        "deepseek",
-        "DeepSeek",
-        "openai-completions",
-        "https://api.deepseek.com",
-        "deepseek-v4-flash",
-    ),
-    ProviderPreset(
-        "kimi-coding",
-        "Kimi Coding Plan",
-        "openai-completions",
-        "https://api.kimi.com/coding/v1",
-        "kimi-for-coding",
-    ),
-)
-
-
-def provider_presets() -> list[dict[str, Any]]:
-    """Return serialisable built-in provider presets."""
-    return [asdict(preset) for preset in PROVIDER_PRESETS]
 
 
 def list_provider_models(config: ProviderConfig) -> list[str]:

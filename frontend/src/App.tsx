@@ -22,10 +22,10 @@ export default function App() {
   }, [refreshConfig]);
 
   const onConfigSaved = useCallback(
-    (newStatus: Status) => {
+    (newStatus: Status, close = true) => {
       setStatus(newStatus);
       refreshConfig();
-      setSettingsOpen(false);
+      if (close) setSettingsOpen(false);
     },
     [refreshConfig],
   );

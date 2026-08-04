@@ -16,6 +16,7 @@ from favai.config import (
     config_from_public_payload,
     config_path,
     data_dir_for,
+    delete_config,
     load_config,
     public_configs,
     save_config,
@@ -32,7 +33,7 @@ from favai.history import (
     save_session,
 )
 from favai.ingest import ingest_uploads
-from favai.providers import list_provider_models, provider_presets
+from favai.providers import list_provider_models
 from favai.proxy import ProxyError, forward_llm
 
 
@@ -143,6 +144,14 @@ class FavaAI(FavaExtensionBase):
         """Return every provider configuration available to new sessions."""
         return public_configs(self.data_dir)
 
+    @extension_endpoint("provider_config_delete", ["POST"])
+    @api_response
+    def api_provider_config_delete(self) -> dict[str, bool]:
+        """Delete one configured provider."""
+        payload = request.get_json(force=True)
+        delete_config(self.data_dir, payload.get("provider", ""))
+        return {"deleted": True}
+
     @extension_endpoint("config_test", ["POST"])
     @api_response
     def api_config_test(self) -> dict[str, Any]:
@@ -157,12 +166,6 @@ class FavaAI(FavaExtensionBase):
         models = list_provider_models(config)
         save_config(self.data_dir, config)
         return {"config": config.to_public_dict(), "models": models}
-
-    @extension_endpoint("providers")
-    @api_response
-    def api_providers(self) -> list[dict[str, Any]]:
-        """Return the built-in quick-config provider presets."""
-        return provider_presets()
 
     @extension_endpoint("models", ["GET", "POST"])
     @api_response

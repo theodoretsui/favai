@@ -19,20 +19,12 @@ export interface Config {
   api: ApiKind;
   base_url: string;
   model: string;
+  models: string[];
   api_key: string;
   api_key_stored: boolean;
   vision: boolean;
   context_window: number;
   max_tokens: number;
-}
-
-export interface ProviderPreset {
-  id: string;
-  name: string;
-  api: ApiKind;
-  base_url: string;
-  model: string;
-  vision: boolean;
 }
 
 export interface Posting {
@@ -133,9 +125,8 @@ export const api = {
   getConfig: () => request<Config>("config"),
   saveConfig: (config: Config) => postJson<Config>("config", config),
   listProviderConfigs: () => request<Config[]>("provider_configs"),
-  testConfig: (config: Config) =>
-    postJson<{ config: Config; models: string[] }>("config_test", config),
-  listProviders: () => request<ProviderPreset[]>("providers"),
+  deleteProviderConfig: (provider: string) =>
+    postJson<{ deleted: boolean }>("provider_config_delete", { provider }),
   listModels: (config?: Config, provider?: string) =>
     config
       ? postJson<{ models: string[] }>("models", config)
