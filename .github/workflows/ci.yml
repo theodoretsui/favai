@@ -32,9 +32,6 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Verify frontend bundle is committed
-        run: git diff --exit-code -- src/favai/FavaAI.js
-
       - name: Set up uv
         uses: astral-sh/setup-uv@v9.0.0
         with:
@@ -52,6 +49,22 @@ jobs:
 
       - name: Build wheel and source distribution
         run: uv build
+
+      - name: Verify frontend bundle is packaged
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          from pathlib import Path
+          import tarfile
+          import zipfile
+
+          wheel = next(Path("dist").glob("*.whl"))
+          sdist = next(Path("dist").glob("*.tar.gz"))
+          with zipfile.ZipFile(wheel) as archive:
+              assert "favai/FavaAI.js" in archive.namelist()
+          with tarfile.open(sdist) as archive:
+              assert any(name.endswith("/src/favai/FavaAI.js") for name in archive.getnames())
+          PY
 
       - name: Check package metadata
         run: uvx twine check dist/*

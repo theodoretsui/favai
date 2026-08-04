@@ -72,9 +72,10 @@ feature/*, fix/*, docs/*, or codex/*
 ### Pull-request CI
 
 `.github/workflows/ci.yml` runs for every PR to `main`. It installs frontend
-dependencies, rebuilds and verifies the committed frontend bundle, runs Python
-tests and Ruff, builds the wheel and source distribution, and validates package
-metadata. Do not weaken, skip, or work around these checks.
+dependencies, builds the frontend bundle, runs Python tests and Ruff, builds
+the wheel and source distribution, verifies that both packages contain the
+frontend bundle, and validates package metadata. Do not weaken, skip, or work
+around these checks.
 
 ### Ordinary changes
 
@@ -119,8 +120,9 @@ version through another reviewed release PR.
 | `make run` | Serve the example ledger |
 
 Run checks relevant to the change before pushing. Frontend changes require
-`make build`, and the generated `src/favai/FavaAI.js` must be committed with
-the source changes. Never edit that generated file by hand.
+`make build` locally. The generated `src/favai/FavaAI.js` is ignored by Git and
+must not be committed; CI builds it before packaging. Never edit that generated
+file by hand.
 
 ## Code Conventions
 
