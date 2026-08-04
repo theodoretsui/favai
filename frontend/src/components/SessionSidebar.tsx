@@ -8,7 +8,7 @@ import {
   SearchOutlined,
 } from "@ant-design/icons";
 import { Conversations } from "@ant-design/x";
-import { Empty, Input, Spin } from "antd";
+import { Button, Empty, Input, Spin } from "antd";
 
 import type { SessionSummary } from "@/api";
 import { t } from "@/i18n";
@@ -71,13 +71,17 @@ export function SessionSidebar({
 
   return (
     <aside className="favai-session-sidebar flex min-h-0 w-full shrink-0 flex-col gap-2 md:w-56">
-      <Conversations.Creation
+      <Button
+        block
+        type="primary"
         icon={<PlusOutlined />}
-        label={t("history.new")}
+        size="small"
         style={{ height: 32, borderRadius: 3 }}
         disabled={disabled}
         onClick={onCreate}
-      />
+      >
+        {t("history.new")}
+      </Button>
       <Input
         allowClear
         size="small"
@@ -87,10 +91,17 @@ export function SessionSidebar({
         value={search}
         onChange={(event) => setSearch(event.target.value)}
       />
-      <div ref={listRef} className="min-h-0 overflow-auto">
+      <div
+        ref={listRef}
+        className="min-h-0 flex-1 overflow-auto rounded-[4px] border border-solid"
+      >
         {filteredSessions.length > 0 ? (
           <Conversations
             activeKey={currentId ?? undefined}
+            styles={{
+              root: { gap: 2, padding: 4 },
+              item: { gap: 4, height: 32, minHeight: 32, paddingInline: 4 },
+            }}
             items={filteredSessions.map((session) => ({
               key: session.id,
               label: session.title,

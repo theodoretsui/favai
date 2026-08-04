@@ -257,8 +257,16 @@ export function UnifiedChat({
   function scheduleEditSave() {
     if (editSaveTimerRef.current) clearTimeout(editSaveTimerRef.current);
     editSaveTimerRef.current = setTimeout(() => {
+      editSaveTimerRef.current = null;
       void persistSession();
     }, 750);
+  }
+
+  async function flushScheduledEditSave() {
+    if (!editSaveTimerRef.current) return;
+    clearTimeout(editSaveTimerRef.current);
+    editSaveTimerRef.current = null;
+    await persistSession();
   }
 
   function applyProposal(proposal: Transaction[] | null) {
@@ -317,8 +325,7 @@ export function UnifiedChat({
   async function openSession(sessionId: string) {
     if (isProcessing || agentRef.current?.state.isStreaming) return;
     try {
-      if (editSaveTimerRef.current) clearTimeout(editSaveTimerRef.current);
-      await persistSession();
+      await flushScheduledEditSave();
       const session = await api.getSession(sessionId);
       setSession(session);
       setSelectedProvider(session.model_provider || config?.provider || "");
@@ -336,8 +343,7 @@ export function UnifiedChat({
 
   async function newSession() {
     if (isProcessing || agentRef.current?.state.isStreaming) return;
-    if (editSaveTimerRef.current) clearTimeout(editSaveTimerRef.current);
-    await persistSession();
+    await flushScheduledEditSave();
     resetSession();
   }
 
@@ -531,15 +537,32 @@ export function UnifiedChat({
   const availableModelChoices = Array.from(
     new Map(
       [
-        ...(effectiveProvider && effectiveModel
-          ? [{ provider: effectiveProvider, model: effectiveModel }]
-          : []),
         ...providerConfigs
           .filter((item) => item.model)
           .map((item) => ({ provider: item.provider, model: item.model })),
         ...models,
+        ...(effectiveProvider && effectiveModel
+          ? [{ provider: effectiveProvider, model: effectiveModel }]
+          : []),
       ].map((choice) => [modelChoiceValue(choice), choice]),
     ).values(),
+  );
+  const choicesByProvider = new Map<string, ModelChoice[]>();
+  for (const choice of availableModelChoices) {
+    const providerChoices = choicesByProvider.get(choice.provider) ?? [];
+    providerChoices.push(choice);
+    choicesByProvider.set(choice.provider, providerChoices);
+  }
+  const modelOptionGroups = Array.from(
+    choicesByProvider,
+    ([provider, choices]) => ({
+      label: provider,
+      title: provider,
+      options: choices.map((choice) => ({
+        value: modelChoiceValue(choice),
+        label: choice.model,
+      })),
+    }),
   );
   const selectedModelValue =
     effectiveProvider && effectiveModel
@@ -571,8 +594,15 @@ export function UnifiedChat({
 
         <Card
           size="small"
-          className="favai-chat-card h-[32rem] max-h-[calc(100vh-12rem)]"
-          styles={{ body: { height: "100%", display: "flex", flexDirection: "column" } }}
+          className="favai-chat-card flex h-[32rem] max-h-[calc(100vh-12rem)] flex-col overflow-hidden"
+          styles={{
+            body: {
+              display: "flex",
+              flex: "1 1 0",
+              minHeight: 0,
+              flexDirection: "column",
+            },
+          }}
           title={
             <Space size={8} wrap>
               <label htmlFor="favai-model-select" className="text-xs">
@@ -584,10 +614,7 @@ export function UnifiedChat({
                 className="w-72 max-w-full"
                 title={currentSession ? t("chat.model.locked") : undefined}
                 disabled={Boolean(currentSession) || isProcessing || isGenerating}
-                options={availableModelChoices.map((choice) => ({
-                  value: modelChoiceValue(choice),
-                  label: `${choice.provider} / ${choice.model}`,
-                }))}
+                options={modelOptionGroups}
                 onChange={(value) => {
                   const choice = parseModelChoice(value);
                   setSelectedProvider(choice.provider);

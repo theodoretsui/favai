@@ -184,4 +184,10 @@
         color: inherit;
         border: none;
     }
+    .favai-root .favai-settings-form .favai-form-item {
+        margin-bottom: 12px !important;
+    }
+    .favai-root .favai-settings-form .favai-form-item-label {
+        padding-bottom: 4px !important;
+    }
 }
