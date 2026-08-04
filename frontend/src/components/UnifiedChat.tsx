@@ -78,7 +78,6 @@ export function UnifiedChat({
   const [accounts, setAccounts] = useState<string[]>([]);
   const [writePath, setWritePath] = useState(DEFAULT_WRITE_PATH);
   const [providerConfigs, setProviderConfigs] = useState<Config[]>([]);
-  const [models, setModels] = useState<ModelChoice[]>([]);
   const [selectedProvider, setSelectedProvider] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [agentEpoch, setAgentEpoch] = useState(0);
@@ -141,27 +140,10 @@ export function UnifiedChat({
       setSelectedProvider(config.provider);
       setSelectedModel(config.model);
     }
-    api.listProviderConfigs().then(async (configs) => {
+    api.listProviderConfigs().then((configs) => {
       setProviderConfigs(configs);
-      const discovered = await Promise.all(
-        configs.map(async (providerConfig) => {
-          try {
-            const result = await api.listModels(undefined, providerConfig.provider);
-            return result.models.map((model) => ({
-              provider: providerConfig.provider,
-              model,
-            }));
-          } catch {
-            return providerConfig.model
-              ? [{ provider: providerConfig.provider, model: providerConfig.model }]
-              : [];
-          }
-        }),
-      );
-      setModels(discovered.flat());
     }).catch(() => {
       setProviderConfigs([config]);
-      setModels(config.model ? [{ provider: config.provider, model: config.model }] : []);
     });
   }, [config]);
 
@@ -537,10 +519,11 @@ export function UnifiedChat({
   const availableModelChoices = Array.from(
     new Map(
       [
-        ...providerConfigs
-          .filter((item) => item.model)
-          .map((item) => ({ provider: item.provider, model: item.model })),
-        ...models,
+        ...providerConfigs.flatMap((item) =>
+          (item.models.length > 0 ? item.models : [item.model])
+            .filter(Boolean)
+            .map((model) => ({ provider: item.provider, model })),
+        ),
         ...(effectiveProvider && effectiveModel
           ? [{ provider: effectiveProvider, model: effectiveModel }]
           : []),

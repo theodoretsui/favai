@@ -7,7 +7,7 @@ directory (``.favai/`` next to the beancount file).
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +30,7 @@ class ProviderConfig:
     api: str = "openai-completions"
     base_url: str = ""
     model: str = ""
+    models: list[str] = field(default_factory=list)
     api_key: str = ""  # literal key or "$ENV_VAR" reference
     vision: bool = True
     context_window: int = DEFAULT_CONTEXT_WINDOW
@@ -37,6 +38,8 @@ class ProviderConfig:
 
     def validate(self) -> None:
         """Raise ConfigError if the configuration is incomplete."""
+        if not self.provider.strip():
+            raise ConfigError("provider is required")
         if self.api not in SUPPORTED_APIS:
             msg = f"Unsupported api '{self.api}', expected one of {SUPPORTED_APIS}"
             raise ConfigError(msg)
@@ -50,6 +53,8 @@ class ProviderConfig:
     def to_public_dict(self) -> dict[str, Any]:
         """Config as returned to the frontend (api key masked)."""
         data = asdict(self)
+        data["models"] = list(dict.fromkeys([*self.models, self.model]))
+        data["models"] = [model for model in data["models"] if model]
         key = self.api_key
         if key and not key.startswith("$"):
             data["api_key"] = key[:4] + "****" if len(key) > 4 else "****"
@@ -130,7 +135,21 @@ def config_from_public_payload(
     keep_key = provider == current.provider and (
         not submitted_key or "****" in submitted_key
     )
+    raw_models = payload.get("models", current.models)
+    if not isinstance(raw_models, list):
+        raise ConfigError("models must be an array")
+    models = list(
+        dict.fromkeys(
+            model.strip()
+            for model in raw_models
+            if isinstance(model, str) and model.strip()
+        )
+    )
     model = payload.get("model", current.model)
+    if models and model not in models:
+        model = models[0]
+    elif model and model not in models:
+        models.append(model)
     if placeholder_model and not model:
         model = "model-discovery"
     return ProviderConfig(
@@ -138,6 +157,7 @@ def config_from_public_payload(
         api=payload.get("api", current.api),
         base_url=payload.get("base_url", current.base_url),
         model=model,
+        models=models,
         api_key=current.api_key if keep_key else submitted_key,
         vision=bool(payload.get("vision", current.vision)),
         context_window=int(payload.get("context_window", current.context_window)),
@@ -146,12 +166,32 @@ def config_from_public_payload(
 
 
 def save_config(data_dir: Path, config: ProviderConfig) -> None:
-    """Upsert a tested provider config and make it the active default."""
+    """Upsert a provider config and make it the active default."""
     config.validate()
     data_dir.mkdir(parents=True, exist_ok=True)
     _, configs = load_configs(data_dir)
     updated = [existing for existing in configs if existing.provider != config.provider]
     updated.append(config)
+    _config_path(data_dir).write_text(
+        json.dumps(
+            [asdict(item) for item in updated],
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def delete_config(data_dir: Path, provider: str) -> None:
+    """Delete one stored provider configuration."""
+    provider = provider.strip()
+    if not provider:
+        raise ConfigError("provider is required")
+    _, configs = load_configs(data_dir)
+    updated = [config for config in configs if config.provider != provider]
+    if len(updated) == len(configs):
+        raise ConfigError(f"提供商 {provider!r} 尚未配置")
     _config_path(data_dir).write_text(
         json.dumps(
             [asdict(item) for item in updated],

@@ -10,6 +10,7 @@ from favai.config import (
     ConfigError,
     ProviderConfig,
     config_from_public_payload,
+    delete_config,
     load_config,
     load_configs,
     save_config,
@@ -48,6 +49,29 @@ def test_multiple_provider_configs_are_upserted(tmp_path):
     assert active == "anthropic"
     assert configs == [openai, anthropic]
     assert load_config(tmp_path, "openai") == openai
+
+
+def test_delete_provider_config(tmp_path):
+    save_config(tmp_path, ProviderConfig(provider="a", base_url="https://a", model="m"))
+    save_config(tmp_path, ProviderConfig(provider="b", base_url="https://b", model="m"))
+
+    delete_config(tmp_path, "a")
+
+    assert [config.provider for config in load_configs(tmp_path)[1]] == ["b"]
+    with pytest.raises(ConfigError, match="尚未配置"):
+        delete_config(tmp_path, "missing")
+
+
+def test_delete_last_provider_returns_to_defaults(tmp_path):
+    save_config(
+        tmp_path,
+        ProviderConfig(provider="only", base_url="https://only", model="m"),
+    )
+
+    delete_config(tmp_path, "only")
+
+    assert load_configs(tmp_path)[1] == []
+    assert load_config(tmp_path) == ProviderConfig()
 
 
 def test_legacy_flat_config_is_loaded(tmp_path):
@@ -102,6 +126,20 @@ def test_public_dict_keeps_env_reference():
     public = config.to_public_dict()
     assert public["api_key"] == "$MY_KEY"
     assert public["api_key_stored"] is True
+
+
+def test_public_dict_includes_legacy_model_in_supported_models():
+    public = ProviderConfig(model="legacy-model").to_public_dict()
+    assert public["models"] == ["legacy-model"]
+
+
+def test_public_payload_normalizes_supported_models():
+    updated = config_from_public_payload(
+        ProviderConfig(model="old"),
+        {"models": ["new-a", "new-a", "new-b"], "model": "old"},
+    )
+    assert updated.models == ["new-a", "new-b"]
+    assert updated.model == "new-a"
 
 
 def test_public_payload_keeps_masked_key_for_same_provider():

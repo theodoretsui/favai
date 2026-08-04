@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  CloudDownloadOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+} from "@ant-design/icons";
 import {
   App as AntApp,
   Button,
@@ -12,39 +17,57 @@ import {
   Typography,
 } from "antd";
 
-import {
-  api,
-  type ApiKind,
-  type Config,
-  type ProviderPreset,
-  type Status,
-} from "@/api";
+import { api, type ApiKind, type Config, type Status } from "@/api";
 import { t } from "@/i18n";
+
+function emptyConfig(): Config {
+  return {
+    provider: "",
+    api: "openai-completions",
+    base_url: "",
+    model: "",
+    models: [],
+    api_key: "",
+    api_key_stored: false,
+    vision: false,
+    context_window: 128_000,
+    max_tokens: 16_384,
+  };
+}
+
+function supportedModels(config: Config): string[] {
+  return Array.from(
+    new Set([...(config.models ?? []), config.model].filter(Boolean)),
+  );
+}
 
 export function SettingsForm({
   onStatusChange,
 }: {
-  onStatusChange: (status: Status) => void;
+  onStatusChange: (status: Status, close?: boolean) => void;
 }) {
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
   const [config, setConfig] = useState<Config | null>(null);
-  const [providers, setProviders] = useState<ProviderPreset[]>([]);
   const [storedConfigs, setStoredConfigs] = useState<Config[]>([]);
-  const [models, setModels] = useState<string[]>([]);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isAdding, setIsAdding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
-  const modelRequestRef = useRef(0);
 
   useEffect(() => {
-    api.listProviders().then(setProviders).catch(() => {});
-    api.listProviderConfigs().then(setStoredConfigs).catch(() => {});
-    api
-      .getConfig()
-      .then((savedConfig) => {
-        setConfig(savedConfig);
-        if (savedConfig.provider !== "custom") {
-          void loadModels(savedConfig, false);
+    Promise.all([api.listProviderConfigs(), api.getConfig()])
+      .then(([configs, activeConfig]) => {
+        setStoredConfigs(configs);
+        if (configs.length === 0) {
+          setConfig(emptyConfig());
+          setIsAdding(true);
+          return;
         }
+        const selected =
+          configs.find((item) => item.provider === activeConfig.provider) ??
+          configs[0];
+        setConfig(selected);
+        setAvailableModels(supportedModels(selected));
       })
       .catch(showError);
   }, []);
@@ -61,68 +84,106 @@ export function SettingsForm({
     setConfig((current) => (current ? { ...current, ...partial } : current));
   }
 
-  function selectProvider(providerId: string) {
-    const stored = storedConfigs.find((item) => item.provider === providerId);
-    if (stored) {
-      setConfig(stored);
-      setModels([]);
-      void loadModels(stored, false);
-      return;
-    }
-    const preset = providers.find((item) => item.id === providerId);
-    if (!preset) {
-      patch({ provider: "custom" });
-      return;
-    }
-    const nextConfig: Config = {
-      ...config!,
-      provider: preset.id,
-      api: preset.api,
-      base_url: preset.base_url,
-      model: preset.model,
-      vision: preset.vision,
-      api_key: "",
-      api_key_stored: false,
-    };
-    setConfig(nextConfig);
-    setModels([]);
-    void loadModels(nextConfig, false);
+  function selectProvider(provider: string) {
+    const selected = storedConfigs.find((item) => item.provider === provider);
+    if (!selected) return;
+    setConfig(selected);
+    setAvailableModels(supportedModels(selected));
+    setIsAdding(false);
   }
 
-  async function loadModels(
-    targetConfig: Config | null = config,
-    reportError = true,
-  ) {
-    if (!targetConfig) return;
-    const requestId = ++modelRequestRef.current;
+  function startAddingProvider() {
+    setConfig(emptyConfig());
+    setAvailableModels([]);
+    setIsAdding(true);
+  }
+
+  function deleteProvider(provider: string) {
+    modal.confirm({
+      title: t("settings.provider.delete"),
+      content: t("settings.provider.delete.confirm", { provider }),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await api.deleteProviderConfig(provider);
+          const configs = await api.listProviderConfigs();
+          setStoredConfigs(configs);
+          if (config?.provider === provider) {
+            if (configs.length > 0) {
+              const activeConfig = await api.getConfig();
+              const selected =
+                configs.find(
+                  (item) => item.provider === activeConfig.provider,
+                ) ?? configs[0];
+              setConfig(selected);
+              setAvailableModels(supportedModels(selected));
+              setIsAdding(false);
+            } else {
+              startAddingProvider();
+            }
+          }
+          onStatusChange(await api.status(), false);
+          void message.success(t("settings.provider.deleted", { provider }));
+        } catch (error) {
+          showError(error);
+          throw error;
+        }
+      },
+    });
+  }
+
+  async function loadModels() {
+    if (!config) return;
     setLoadingModels(true);
     try {
-      const result = await api.listModels(targetConfig);
-      if (requestId !== modelRequestRef.current) return;
-      setModels(result.models);
-      if (!targetConfig.model && result.models.length > 0) {
-        patch({ model: result.models[0] });
-      }
+      const result = await api.listModels(config);
+      setAvailableModels((current) =>
+        Array.from(new Set([...current, ...result.models])),
+      );
+      void message.success(
+        t("settings.models.fetched", { count: result.models.length }),
+      );
     } catch (error) {
-      if (requestId === modelRequestRef.current && reportError) showError(error);
+      showError(error);
     } finally {
-      if (requestId === modelRequestRef.current) setLoadingModels(false);
+      setLoadingModels(false);
     }
   }
 
-  async function testAndSave() {
+  async function save() {
     if (!config) return;
+    const provider = config.provider.trim();
+    const models = supportedModels(config);
+    if (
+      isAdding &&
+      storedConfigs.some((item) => item.provider === provider)
+    ) {
+      void message.error(t("settings.provider.duplicate", { provider }));
+      return;
+    }
+    const nextConfig = {
+      ...config,
+      provider,
+      models,
+      model: models.includes(config.model) ? config.model : (models[0] ?? ""),
+    };
     setSaving(true);
     try {
-      const result = await api.testConfig(config);
-      setConfig(result.config);
-      setModels(result.models);
-      setStoredConfigs((current) => [
-        ...current.filter((item) => item.provider !== result.config.provider),
-        result.config,
-      ]);
-      onStatusChange(await api.status());
-      void message.success(t("settings.test.success"));
+      const saved = await api.saveConfig(nextConfig);
+      setConfig(saved);
+      setAvailableModels(supportedModels(saved));
+      setStoredConfigs((current) => {
+        const index = current.findIndex(
+          (item) => item.provider === saved.provider,
+        );
+        if (index < 0) return [...current, saved];
+        return current.map((item, itemIndex) =>
+          itemIndex === index ? saved : item,
+        );
+      });
+      setIsAdding(false);
+      onStatusChange(await api.status(), true);
+      void message.success(t("settings.saved"));
     } catch (error) {
       showError(error);
     } finally {
@@ -132,29 +193,74 @@ export function SettingsForm({
 
   if (!config) return <Skeleton active paragraph={{ rows: 6 }} />;
 
-  const maskedKey = config.api_key.includes("****");
+  const selectedModels = supportedModels(config);
   const modelOptions = Array.from(
-    new Set([config.model, ...models].filter(Boolean)),
+    new Set([...availableModels, ...selectedModels]),
   ).map((model) => ({ label: model, value: model }));
+  const providerOptions = [...storedConfigs]
+    .sort((left, right) => left.provider.localeCompare(right.provider))
+    .map((item) => ({ label: item.provider, value: item.provider }));
+  const maskedKey = config.api_key.includes("****");
 
   return (
     <Form layout="vertical" requiredMark={false} className="favai-settings-form">
-      <Form.Item label={t("settings.provider")}>
-        <Select
-          value={config.provider}
-          onChange={selectProvider}
-          options={[
-            ...providers.map((provider) => ({
-              label: provider.name,
-              value: provider.id,
-            })),
-            { label: t("settings.provider.custom"), value: "custom" },
-          ]}
-        />
+      <Form.Item
+        label={t("settings.provider.configured")}
+        htmlFor="favai-provider-config"
+      >
+        <Space.Compact block>
+          {isAdding ? (
+            <Input
+              id="favai-provider-config"
+              autoFocus
+              className="min-w-0 flex-1"
+              value={config.provider}
+              placeholder={t("settings.provider.name.placeholder")}
+              onChange={(event) => patch({ provider: event.target.value })}
+            />
+          ) : (
+            <Select
+              id="favai-provider-config"
+              className="min-w-0 flex-1"
+              value={config.provider}
+              options={providerOptions}
+              onChange={selectProvider}
+              optionRender={(option) => {
+                const provider = String(option.data.value);
+                return (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate">{provider}</span>
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      aria-label={t("settings.provider.delete.aria", {
+                        provider,
+                      })}
+                      icon={<DeleteOutlined />}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        deleteProvider(provider);
+                      }}
+                    />
+                  </div>
+                );
+              }}
+            />
+          )}
+          <Button
+            icon={<PlusOutlined />}
+            title={t("settings.provider.add")}
+            aria-label={t("settings.provider.add")}
+            onClick={startAddingProvider}
+          />
+        </Space.Compact>
       </Form.Item>
 
-      <Form.Item label={t("settings.api")}>
+      <Form.Item label={t("settings.api")} htmlFor="favai-provider-api">
         <Select
+          id="favai-provider-api"
           value={config.api}
           onChange={(api: ApiKind) => patch({ api })}
           options={[
@@ -164,26 +270,44 @@ export function SettingsForm({
         />
       </Form.Item>
 
-      <Form.Item label={t("settings.base_url")}>
+      <Form.Item
+        label={t("settings.base_url")}
+        htmlFor="favai-provider-base-url"
+      >
         <Input
+          id="favai-provider-base-url"
           value={config.base_url}
-          disabled={config.provider !== "custom"}
           onChange={(event) => patch({ base_url: event.target.value })}
         />
       </Form.Item>
 
-      <Form.Item label={t("settings.model")}>
+      <Form.Item
+        label={t("settings.models.supported")}
+        htmlFor="favai-provider-models"
+      >
         <Space.Compact block>
           <Select
+            id="favai-provider-models"
             className="min-w-0 flex-1"
-            value={config.model || undefined}
-            placeholder={t("settings.model.placeholder")}
-            loading={loadingModels}
-            showSearch
+            mode="tags"
+            value={selectedModels}
+            placeholder={t("settings.models.placeholder")}
             options={modelOptions}
-            onChange={(model) => patch({ model })}
+            tokenSeparators={[","]}
+            onChange={(models) =>
+              patch({
+                models,
+                model: models.includes(config.model)
+                  ? config.model
+                  : (models[0] ?? ""),
+              })
+            }
           />
-          <Button onClick={() => void loadModels(config)} loading={loadingModels}>
+          <Button
+            icon={<CloudDownloadOutlined />}
+            loading={loadingModels}
+            onClick={() => void loadModels()}
+          >
             {loadingModels
               ? t("settings.models.loading")
               : t("settings.models.fetch")}
@@ -191,8 +315,12 @@ export function SettingsForm({
         </Space.Compact>
       </Form.Item>
 
-      <Form.Item label={t("settings.api_key")}>
+      <Form.Item
+        label={t("settings.api_key")}
+        htmlFor="favai-provider-api-key"
+      >
         <Input.Password
+          id="favai-provider-api-key"
           value={maskedKey ? "" : config.api_key}
           placeholder={
             maskedKey || config.api_key_stored
@@ -200,11 +328,6 @@ export function SettingsForm({
               : t("settings.api_key.placeholder")
           }
           onChange={(event) => patch({ api_key: event.target.value })}
-          onBlur={() => {
-            if (config.provider !== "custom" && config.api_key) {
-              void loadModels(config, false);
-            }
-          }}
         />
         <Typography.Text type="secondary" className="text-xs">
           {t("settings.api_key.placeholder")}
@@ -213,22 +336,31 @@ export function SettingsForm({
 
       <Form.Item label={t("settings.vision")}>
         <Switch
+          aria-label={t("settings.vision")}
           checked={config.vision}
           onChange={(vision) => patch({ vision })}
         />
       </Form.Item>
 
       <div className="grid grid-cols-2 gap-4">
-        <Form.Item label={t("settings.context_window")}>
+        <Form.Item
+          label={t("settings.context_window")}
+          htmlFor="favai-provider-context-window"
+        >
           <InputNumber
+            id="favai-provider-context-window"
             min={1}
             className="w-full"
             value={config.context_window}
             onChange={(value) => patch({ context_window: value ?? 0 })}
           />
         </Form.Item>
-        <Form.Item label={t("settings.max_tokens")}>
+        <Form.Item
+          label={t("settings.max_tokens")}
+          htmlFor="favai-provider-max-tokens"
+        >
           <InputNumber
+            id="favai-provider-max-tokens"
             min={1}
             className="w-full"
             value={config.max_tokens}
@@ -238,8 +370,8 @@ export function SettingsForm({
       </div>
 
       <div className="flex justify-end">
-        <Button type="primary" loading={saving} onClick={() => void testAndSave()}>
-          {saving ? t("settings.test.testing") : t("settings.test.save")}
+        <Button type="primary" loading={saving} onClick={() => void save()}>
+          {saving ? t("settings.saving") : t("settings.save")}
         </Button>
       </div>
     </Form>
