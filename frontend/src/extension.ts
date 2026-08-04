@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import css from "./index.css?inline";
 import App from "./App";
-import { setPortalContainer } from "./lib/portal";
+import { FavaProvider } from "./components/FavaProvider";
 import { syncFavaTheme } from "./lib/theme";
 
 /**
@@ -36,7 +36,8 @@ export default {
     rootEl.className = "favai-root min-h-screen";
     mountPoint.appendChild(rootEl);
     syncFavaTheme(rootEl);
-    setPortalContainer(rootEl);
-    createRoot(rootEl).render(createElement(App));
+    createRoot(rootEl).render(
+      createElement(FavaProvider, null, createElement(App)),
+    );
   },
 };

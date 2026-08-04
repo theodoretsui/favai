@@ -1,16 +1,8 @@
-import { CheckCircle2Icon } from "lucide-react";
+import { CheckCircleOutlined } from "@ant-design/icons";
+import { Card, Space, Table, Tag, Typography } from "antd";
 
 import type { Transaction } from "@/api";
 import { t } from "@/i18n";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 export function ImportedTransactions({
   transactions,
@@ -20,61 +12,68 @@ export function ImportedTransactions({
   confirmedCount: number | null;
 }) {
   return (
-    <section className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-3">
-      <div className="flex items-center gap-2">
-        <CheckCircle2Icon className="size-4 text-emerald-600" />
-        <h2 className="text-sm font-medium">{t("imported.title")}</h2>
-        <Badge variant="secondary">
-          {t("imported.count", {
-            count: confirmedCount ?? transactions.length,
-          })}
-        </Badge>
+    <Card
+      size="small"
+      title={
+        <Space>
+          <CheckCircleOutlined className="text-emerald-600" />
+          <span>{t("imported.title")}</span>
+          <Tag>
+            {t("imported.count", {
+              count: confirmedCount ?? transactions.length,
+            })}
+          </Tag>
+        </Space>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {transactions.map((transaction, transactionIndex) => (
+          <Card
+            key={transactionIndex}
+            size="small"
+            title={
+              <Space wrap>
+                <Typography.Text type="secondary" className="font-mono text-xs">
+                  {transaction.date}
+                </Typography.Text>
+                {transaction.payee && (
+                  <Typography.Text strong>{transaction.payee}</Typography.Text>
+                )}
+                <Typography.Text>{transaction.narration}</Typography.Text>
+              </Space>
+            }
+          >
+            <Table
+              size="small"
+              pagination={false}
+              rowKey={(_, index) => String(index)}
+              dataSource={transaction.postings}
+              columns={[
+                {
+                  title: t("proposal.account"),
+                  dataIndex: "account",
+                  className: "font-mono text-xs",
+                },
+                {
+                  title: t("proposal.amount"),
+                  dataIndex: "amount",
+                  align: "right",
+                  width: 130,
+                  className: "font-mono text-xs",
+                  render: (value: string) => value || "—",
+                },
+                {
+                  title: t("proposal.currency"),
+                  dataIndex: "currency",
+                  width: 100,
+                  className: "font-mono text-xs",
+                  render: (value: string) => value || "—",
+                },
+              ]}
+            />
+          </Card>
+        ))}
       </div>
-
-      {transactions.map((transaction, transactionIndex) => (
-        <div
-          key={transactionIndex}
-          className="flex flex-col gap-2 rounded-lg border bg-card p-3"
-        >
-          <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-            <span className="font-mono text-xs text-muted-foreground">
-              {transaction.date}
-            </span>
-            {transaction.payee && (
-              <span className="font-medium">{transaction.payee}</span>
-            )}
-            <span>{transaction.narration}</span>
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("proposal.account")}</TableHead>
-                <TableHead className="w-32 text-right">
-                  {t("proposal.amount")}
-                </TableHead>
-                <TableHead className="w-24">
-                  {t("proposal.currency")}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transaction.postings.map((posting, postingIndex) => (
-                <TableRow key={postingIndex}>
-                  <TableCell className="font-mono text-xs">
-                    {posting.account}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-xs">
-                    {posting.amount || "—"}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {posting.currency || "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      ))}
-    </section>
+    </Card>
   );
 }

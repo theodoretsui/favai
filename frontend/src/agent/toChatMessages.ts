@@ -8,7 +8,7 @@
  */
 import type { Message as PiAiMessage } from "@earendil-works/pi-ai";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Message } from "@/components/ui/chat";
+import type { ChatMessage } from "@/agent/chatTypes";
 
 interface ToolResultLookup {
   result: unknown;
@@ -32,7 +32,7 @@ export function ingestContentBlock(text: string): { type: "text"; text: string }
 export function toChatMessages(
   messages: readonly AgentMessage[],
   streamingMessage?: AgentMessage,
-): Message[] {
+): ChatMessage[] {
   // ``AgentMessage`` is structurally pi-ai ``Message`` (see note above).
   const committed = messages as readonly PiAiMessage[];
   const streaming = streamingMessage as PiAiMessage | undefined;
@@ -49,7 +49,7 @@ export function toChatMessages(
     }
   }
 
-  const out: Message[] = [];
+  const out: ChatMessage[] = [];
   for (const msg of committed) {
     out.push(toChatMessage(msg, resultsById));
   }
@@ -63,10 +63,10 @@ export function toChatMessages(
 function toChatMessage(
   msg: PiAiMessage,
   resultsById: Map<string, ToolResultLookup>,
-): Message {
+): ChatMessage {
   if (msg.role === "user") {
     const ingestTexts: string[] = [];
-    const attachments: NonNullable<Message["experimental_attachments"]> = [];
+    const attachments: NonNullable<ChatMessage["experimental_attachments"]> = [];
     let visibleText = "";
     if (typeof msg.content === "string") {
       visibleText = msg.content;
@@ -107,8 +107,8 @@ function toChatMessage(
   }
 
   // Assistant (also covers streamingMessage, which is an AssistantMessage).
-  const parts: Message["parts"] = [];
-  const toolInvocations: NonNullable<Message["toolInvocations"]> = [];
+  const parts: ChatMessage["parts"] = [];
+  const toolInvocations: NonNullable<ChatMessage["toolInvocations"]> = [];
   let textAccumulator = "";
 
   for (const block of msg.content) {

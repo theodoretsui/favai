@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import {
+  App as AntApp,
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Skeleton,
+  Space,
+  Switch,
+  Typography,
+} from "antd";
 
 import {
   api,
@@ -9,29 +20,13 @@ import {
   type Status,
 } from "@/api";
 import { t } from "@/i18n";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 
-/**
- * Settings form used inside the settings Dialog.
- * Loads config from the backend and lets the user edit all fields.
- */
 export function SettingsForm({
-  status: _status,
   onStatusChange,
 }: {
-  status: Status | null;
   onStatusChange: (status: Status) => void;
 }) {
+  const { message } = AntApp.useApp();
   const [config, setConfig] = useState<Config | null>(null);
   const [providers, setProviders] = useState<ProviderPreset[]>([]);
   const [storedConfigs, setStoredConfigs] = useState<Config[]>([]);
@@ -51,14 +46,20 @@ export function SettingsForm({
           void loadModels(savedConfig, false);
         }
       })
-      .catch((err) =>
-        toast.error(
-          t("error.generic", {
-            message: err instanceof Error ? err.message : String(err),
-          }),
-        ),
-      );
+      .catch(showError);
   }, []);
+
+  function showError(error: unknown) {
+    void message.error(
+      t("error.generic", {
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+
+  function patch(partial: Partial<Config>) {
+    setConfig((current) => (current ? { ...current, ...partial } : current));
+  }
 
   function selectProvider(providerId: string) {
     const stored = storedConfigs.find((item) => item.provider === providerId);
@@ -102,24 +103,11 @@ export function SettingsForm({
       if (!targetConfig.model && result.models.length > 0) {
         patch({ model: result.models[0] });
       }
-    } catch (err) {
-      if (requestId !== modelRequestRef.current) return;
-      if (reportError) {
-        toast.error(
-          t("error.generic", {
-            message: err instanceof Error ? err.message : String(err),
-          }),
-        );
-      }
+    } catch (error) {
+      if (requestId === modelRequestRef.current && reportError) showError(error);
     } finally {
-      if (requestId === modelRequestRef.current) {
-        setLoadingModels(false);
-      }
+      if (requestId === modelRequestRef.current) setLoadingModels(false);
     }
-  }
-
-  function patch(partial: Partial<Config>) {
-    setConfig((current) => (current ? { ...current, ...partial } : current));
   }
 
   async function testAndSave() {
@@ -134,183 +122,126 @@ export function SettingsForm({
         result.config,
       ]);
       onStatusChange(await api.status());
-      toast.success(t("settings.test.success"));
-    } catch (err) {
-      toast.error(
-        t("error.generic", {
-          message: err instanceof Error ? err.message : String(err),
-        }),
-      );
+      void message.success(t("settings.test.success"));
+    } catch (error) {
+      showError(error);
     } finally {
       setSaving(false);
     }
   }
 
-  const maskedKey = config?.api_key.includes("****") ?? false;
+  if (!config) return <Skeleton active paragraph={{ rows: 6 }} />;
 
-  if (config === null) {
-    return (
-      <div className="py-4 text-sm text-muted-foreground">
-        {t("settings.loading")}
-      </div>
-    );
-  }
+  const maskedKey = config.api_key.includes("****");
+  const modelOptions = Array.from(
+    new Set([config.model, ...models].filter(Boolean)),
+  ).map((model) => ({ label: model, value: model }));
 
   return (
-    <div className="flex flex-col gap-4 pt-2">
-      <div className="flex flex-col gap-1.5">
-        <Label>{t("settings.provider")}</Label>
-        <Select value={config.provider} onValueChange={selectProvider}>
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {providers.map((provider) => (
-              <SelectItem key={provider.id} value={provider.id}>
-                {provider.name}
-              </SelectItem>
-            ))}
-            <SelectItem value="custom">
-              {t("settings.provider.custom")}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+    <Form layout="vertical" requiredMark={false} className="favai-settings-form">
+      <Form.Item label={t("settings.provider")}>
+        <Select
+          value={config.provider}
+          onChange={selectProvider}
+          options={[
+            ...providers.map((provider) => ({
+              label: provider.name,
+              value: provider.id,
+            })),
+            { label: t("settings.provider.custom"), value: "custom" },
+          ]}
+        />
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <Label>{t("settings.api")}</Label>
+      <Form.Item label={t("settings.api")}>
         <Select
           value={config.api}
-          onValueChange={(value) => patch({ api: value as ApiKind })}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="openai-completions">
-              {t("settings.api.openai")}
-            </SelectItem>
-            <SelectItem value="anthropic-messages">
-              {t("settings.api.anthropic")}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          onChange={(api: ApiKind) => patch({ api })}
+          options={[
+            { label: t("settings.api.openai"), value: "openai-completions" },
+            { label: t("settings.api.anthropic"), value: "anthropic-messages" },
+          ]}
+        />
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <Label>{t("settings.base_url")}</Label>
+      <Form.Item label={t("settings.base_url")}>
         <Input
           value={config.base_url}
           disabled={config.provider !== "custom"}
-          onChange={(e) => patch({ base_url: e.target.value })}
+          onChange={(event) => patch({ base_url: event.target.value })}
         />
-      </div>
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <Label>{t("settings.model")}</Label>
-        <div className="flex items-center gap-2">
+      <Form.Item label={t("settings.model")}>
+        <Space.Compact block>
           <Select
-            value={config.model}
-            onValueChange={(model) => patch({ model })}
-          >
-            <SelectTrigger className="min-w-0 flex-1">
-              <SelectValue placeholder={t("settings.model.placeholder")} />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from(
-                new Set([config.model, ...models].filter(Boolean)),
-              ).map((model) => (
-                <SelectItem key={model} value={model}>
-                  {model}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-8 shrink-0"
-            onClick={() => void loadModels(config)}
-            disabled={loadingModels}
-          >
+            className="min-w-0 flex-1"
+            value={config.model || undefined}
+            placeholder={t("settings.model.placeholder")}
+            loading={loadingModels}
+            showSearch
+            options={modelOptions}
+            onChange={(model) => patch({ model })}
+          />
+          <Button onClick={() => void loadModels(config)} loading={loadingModels}>
             {loadingModels
               ? t("settings.models.loading")
               : t("settings.models.fetch")}
           </Button>
-        </div>
-      </div>
+        </Space.Compact>
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <Label>{t("settings.api_key")}</Label>
-        <Input
+      <Form.Item label={t("settings.api_key")}>
+        <Input.Password
           value={maskedKey ? "" : config.api_key}
           placeholder={
             maskedKey || config.api_key_stored
               ? t("settings.api_key.keep")
               : t("settings.api_key.placeholder")
           }
-          onChange={(e) => patch({ api_key: e.target.value })}
+          onChange={(event) => patch({ api_key: event.target.value })}
           onBlur={() => {
             if (config.provider !== "custom" && config.api_key) {
               void loadModels(config, false);
             }
           }}
         />
-        <span className="text-xs text-muted-foreground">
+        <Typography.Text type="secondary" className="text-xs">
           {t("settings.api_key.placeholder")}
-        </span>
-      </div>
+        </Typography.Text>
+      </Form.Item>
 
-      <div className="flex items-center gap-2">
+      <Form.Item label={t("settings.vision")}>
         <Switch
-          id="favai-vision"
           checked={config.vision}
-          onCheckedChange={(checked) => patch({ vision: checked })}
+          onChange={(vision) => patch({ vision })}
         />
-        <Label htmlFor="favai-vision">{t("settings.vision")}</Label>
-      </div>
+      </Form.Item>
 
-      <div className="flex gap-4">
-        <div className="flex flex-1 flex-col gap-1.5">
-          <Label>{t("settings.context_window")}</Label>
-          <Input
-            type="number"
+      <div className="grid grid-cols-2 gap-4">
+        <Form.Item label={t("settings.context_window")}>
+          <InputNumber
             min={1}
+            className="w-full"
             value={config.context_window}
-            onChange={(e) =>
-              patch({ context_window: Number(e.target.value) || 0 })
-            }
+            onChange={(value) => patch({ context_window: value ?? 0 })}
           />
-        </div>
-        <div className="flex flex-1 flex-col gap-1.5">
-          <Label>{t("settings.max_tokens")}</Label>
-          <Input
-            type="number"
+        </Form.Item>
+        <Form.Item label={t("settings.max_tokens")}>
+          <InputNumber
             min={1}
+            className="w-full"
             value={config.max_tokens}
-            onChange={(e) =>
-              patch({ max_tokens: Number(e.target.value) || 0 })
-            }
+            onChange={(value) => patch({ max_tokens: value ?? 0 })}
           />
-        </div>
+        </Form.Item>
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={testAndSave} disabled={saving}>
+        <Button type="primary" loading={saving} onClick={() => void testAndSave()}>
           {saving ? t("settings.test.testing") : t("settings.test.save")}
         </Button>
       </div>
-    </div>
+    </Form>
   );
-}
-
-/** @deprecated Use SettingsForm inside a Dialog instead. */
-export function SettingsTab({
-  status,
-  onStatusChange,
-}: {
-  status: Status | null;
-  onStatusChange: (status: Status) => void;
-}) {
-  return <SettingsForm status={status} onStatusChange={onStatusChange} />;
 }

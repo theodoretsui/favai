@@ -1,24 +1,10 @@
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { Button, Card, Form, Input, Space, Table } from "antd";
 
 import type { Posting, Transaction } from "@/api";
 import { t } from "@/i18n";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { AccountCombobox } from "@/components/AccountCombobox";
 
-/**
- * Editable proposal table. Every edit produces a new immutable array via
- * onChange; the parent marks the proposal dirty.
- */
 export function ProposalTable({
   transactions,
   accounts,
@@ -30,7 +16,9 @@ export function ProposalTable({
 }) {
   function updateTxn(index: number, patch: Partial<Transaction>) {
     onChange(
-      transactions.map((txn, i) => (i === index ? { ...txn, ...patch } : txn)),
+      transactions.map((txn, itemIndex) =>
+        itemIndex === index ? { ...txn, ...patch } : txn,
+      ),
     );
   }
 
@@ -41,8 +29,8 @@ export function ProposalTable({
   ) {
     const txn = transactions[txnIndex];
     updateTxn(txnIndex, {
-      postings: txn.postings.map((p, i) =>
-        i === postingIndex ? { ...p, ...patch } : p,
+      postings: txn.postings.map((posting, itemIndex) =>
+        itemIndex === postingIndex ? { ...posting, ...patch } : posting,
       ),
     });
   }
@@ -57,154 +45,148 @@ export function ProposalTable({
   function removePosting(txnIndex: number, postingIndex: number) {
     const txn = transactions[txnIndex];
     updateTxn(txnIndex, {
-      postings: txn.postings.filter((_, i) => i !== postingIndex),
+      postings: txn.postings.filter((_, index) => index !== postingIndex),
     });
-  }
-
-  function removeTxn(index: number) {
-    onChange(transactions.filter((_, i) => i !== index));
   }
 
   return (
     <div className="flex flex-col gap-3">
       {transactions.map((txn, txnIndex) => (
-        <div
+        <Card
           key={txnIndex}
-          className="flex flex-col gap-3 rounded-lg border bg-card p-3"
+          size="small"
+          extra={
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              title={t("proposal.transaction.remove")}
+              onClick={() =>
+                onChange(transactions.filter((_, index) => index !== txnIndex))
+              }
+            />
+          }
         >
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-muted-foreground">
-                {t("proposal.date")}
-              </Label>
+          <div className="grid grid-cols-1 gap-x-2 md:grid-cols-12">
+            <Form.Item className="md:col-span-2" label={t("proposal.date")}>
               <Input
                 type="date"
-                className="w-36"
                 value={txn.date}
-                onChange={(e) =>
-                  updateTxn(txnIndex, { date: e.target.value })
+                onChange={(event) =>
+                  updateTxn(txnIndex, { date: event.target.value })
                 }
               />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-muted-foreground">
-                {t("proposal.payee")}
-              </Label>
+            </Form.Item>
+            <Form.Item className="md:col-span-3" label={t("proposal.payee")}>
               <Input
-                className="w-44"
                 value={txn.payee ?? ""}
-                onChange={(e) =>
-                  updateTxn(txnIndex, { payee: e.target.value })
+                onChange={(event) =>
+                  updateTxn(txnIndex, { payee: event.target.value })
                 }
               />
-            </div>
-            <div className="flex min-w-40 flex-1 flex-col gap-1">
-              <Label className="text-xs text-muted-foreground">
-                {t("proposal.narration")}
-              </Label>
+            </Form.Item>
+            <Form.Item
+              className="md:col-span-4"
+              label={t("proposal.narration")}
+            >
               <Input
                 value={txn.narration}
-                onChange={(e) =>
-                  updateTxn(txnIndex, { narration: e.target.value })
+                onChange={(event) =>
+                  updateTxn(txnIndex, { narration: event.target.value })
                 }
               />
-            </div>
-            <div className="flex min-w-40 flex-1 flex-col gap-1">
-              <Label className="text-xs text-muted-foreground">
-                {t("proposal.tags")}
-              </Label>
+            </Form.Item>
+            <Form.Item className="md:col-span-3" label={t("proposal.tags")}>
               <Input
                 key={(txn.tags ?? []).join(",")}
                 defaultValue={(txn.tags ?? []).map((tag) => `#${tag}`).join(" ")}
                 placeholder={t("proposal.tags.placeholder")}
-                onBlur={(e) =>
+                onBlur={(event) =>
                   updateTxn(txnIndex, {
-                    tags: e.target.value
+                    tags: event.target.value
                       .split(/[,\s]+/)
                       .map((tag) => tag.trim().replace(/^#/, ""))
                       .filter(Boolean),
                   })
                 }
               />
-            </div>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title={t("proposal.transaction.remove")}
-              onClick={() => removeTxn(txnIndex)}
-            >
-              <Trash2Icon className="text-destructive" />
-            </Button>
+            </Form.Item>
           </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("proposal.account")}</TableHead>
-                <TableHead className="w-28">{t("proposal.amount")}</TableHead>
-                <TableHead className="w-24">
-                  {t("proposal.currency")}
-                </TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {txn.postings.map((posting, postingIndex) => (
-                <TableRow key={postingIndex}>
-                  <TableCell>
-                    <AccountCombobox
-                      value={posting.account}
-                      accounts={accounts}
-                      onChange={(account) =>
-                        updatePosting(txnIndex, postingIndex, { account })
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      value={posting.amount ?? ""}
-                      onChange={(e) =>
-                        updatePosting(txnIndex, postingIndex, {
-                          amount: e.target.value,
-                        })
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      value={posting.currency ?? ""}
-                      onChange={(e) =>
-                        updatePosting(txnIndex, postingIndex, {
-                          currency: e.target.value,
-                        })
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      title={t("proposal.posting.remove")}
-                      onClick={() => removePosting(txnIndex, postingIndex)}
-                    >
-                      <Trash2Icon />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          <div>
+          <Table<Posting>
+            size="small"
+            pagination={false}
+            rowKey={(_, postingIndex) => String(postingIndex)}
+            dataSource={txn.postings}
+            scroll={{ x: 560 }}
+            columns={[
+              {
+                title: t("proposal.account"),
+                dataIndex: "account",
+                render: (_, posting, postingIndex) => (
+                  <AccountCombobox
+                    value={posting.account}
+                    accounts={accounts}
+                    onChange={(account) =>
+                      updatePosting(txnIndex, postingIndex, { account })
+                    }
+                  />
+                ),
+              },
+              {
+                title: t("proposal.amount"),
+                dataIndex: "amount",
+                width: 130,
+                render: (_, posting, postingIndex) => (
+                  <Input
+                    value={posting.amount ?? ""}
+                    onChange={(event) =>
+                      updatePosting(txnIndex, postingIndex, {
+                        amount: event.target.value,
+                      })
+                    }
+                  />
+                ),
+              },
+              {
+                title: t("proposal.currency"),
+                dataIndex: "currency",
+                width: 110,
+                render: (_, posting, postingIndex) => (
+                  <Input
+                    value={posting.currency ?? ""}
+                    onChange={(event) =>
+                      updatePosting(txnIndex, postingIndex, {
+                        currency: event.target.value,
+                      })
+                    }
+                  />
+                ),
+              },
+              {
+                key: "actions",
+                width: 44,
+                render: (_, _posting, postingIndex) => (
+                  <Button
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    title={t("proposal.posting.remove")}
+                    onClick={() => removePosting(txnIndex, postingIndex)}
+                  />
+                ),
+              },
+            ]}
+          />
+          <Space className="mt-3">
             <Button
-              variant="outline"
-              size="sm"
+              icon={<PlusOutlined />}
               onClick={() => addPosting(txnIndex)}
             >
-              <PlusIcon />
               {t("proposal.posting.add")}
             </Button>
-          </div>
-        </div>
+          </Space>
+        </Card>
       ))}
     </div>
   );

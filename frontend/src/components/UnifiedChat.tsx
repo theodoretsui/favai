@@ -1,6 +1,18 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import {
+  Alert,
+  App as AntApp,
+  Button,
+  Card,
+  Empty,
+  Form,
+  Input,
+  Select,
+  Space,
+  Tag,
+  Typography,
+} from "antd";
 
 import {
   api,
@@ -19,20 +31,10 @@ import {
   ingestContentBlock,
   toChatMessages,
 } from "@/agent/toChatMessages";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Callout } from "@/components/ui/callout";
-import { Chat } from "@/components/ui/chat";
+import { Chat } from "@/components/Chat";
 import { ProposalTable } from "@/components/ProposalTable";
 import { SessionSidebar } from "@/components/SessionSidebar";
 import { ImportedTransactions } from "@/components/ImportedTransactions";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
 
 interface ModelChoice {
@@ -58,6 +60,7 @@ export function UnifiedChat({
   config: Config | null;
   status: Status | null;
 }) {
+  const { message, modal } = AntApp.useApp();
   // Re-render trigger: bumped on every agent event so the derived message list
   // reflects the latest ``agent.state``. The agent transcript is the single
   // source of truth -- we no longer mirror it into local state.
@@ -203,12 +206,12 @@ export function UnifiedChat({
   ]);
 
   const showError = useCallback((err: unknown) => {
-    toast.error(
+    void message.error(
       t("error.generic", {
         message: err instanceof Error ? err.message : String(err),
       }),
     );
-  }, []);
+  }, [message]);
 
   function setSession(session: Session | null) {
     sessionRef.current = session;
@@ -291,14 +294,14 @@ export function UnifiedChat({
           !effectiveConfig?.vision &&
           !(status?.ocr_available ?? false)
         ) {
-          toast.warning(
+          void message.warning(
             `${t("warning.title")}: ${t("warning.image.no_reader")}`,
           );
         }
         return resolved;
       });
     },
-    [effectiveConfig?.vision, status?.ocr_available],
+    [effectiveConfig?.vision, message, status?.ocr_available],
   );
 
   function resetSession() {
@@ -338,29 +341,48 @@ export function UnifiedChat({
     resetSession();
   }
 
-  async function renameHistory(session: SessionSummary) {
-    const title = window
-      .prompt(t("history.rename.prompt"), session.title)
-      ?.trim();
-    if (!title || title === session.title) return;
-    try {
-      const renamed = await api.renameSession(session.id, title);
-      if (sessionRef.current?.id === renamed.id) setSession(renamed);
-      refreshSessions();
-    } catch (err) {
-      showError(err);
-    }
+  function renameHistory(session: SessionSummary) {
+    let title = session.title;
+    modal.confirm({
+      title: t("history.rename"),
+      content: (
+        <Input
+          autoFocus
+          defaultValue={session.title}
+          onChange={(event) => { title = event.target.value; }}
+        />
+      ),
+      onOk: async () => {
+        const nextTitle = title.trim();
+        if (!nextTitle || nextTitle === session.title) return;
+        try {
+          const renamed = await api.renameSession(session.id, nextTitle);
+          if (sessionRef.current?.id === renamed.id) setSession(renamed);
+          await refreshSessions();
+        } catch (err) {
+          showError(err);
+          throw err;
+        }
+      },
+    });
   }
 
-  async function deleteHistory(session: SessionSummary) {
-    if (!window.confirm(t("history.delete.confirm"))) return;
-    try {
-      await api.deleteSession(session.id);
-      if (sessionRef.current?.id === session.id) resetSession();
-      refreshSessions();
-    } catch (err) {
-      showError(err);
-    }
+  function deleteHistory(session: SessionSummary) {
+    modal.confirm({
+      title: t("history.delete"),
+      content: t("history.delete.confirm"),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await api.deleteSession(session.id);
+          if (sessionRef.current?.id === session.id) resetSession();
+          await refreshSessions();
+        } catch (err) {
+          showError(err);
+          throw err;
+        }
+      },
+    });
   }
 
   async function handleSubmit(event?: { preventDefault?: () => void }) {
@@ -400,7 +422,7 @@ export function UnifiedChat({
             activeConfig.vision,
           );
           for (const warning of ingestResult.warnings) {
-            toast.warning(`${t("warning.title")}: ${warning}`);
+            void message.warning(`${t("warning.title")}: ${warning}`);
           }
           const { accounts: accs, currencies, payees } = getLedgerData();
           const currentDate = new Date().toISOString().slice(0, 10);
@@ -416,7 +438,7 @@ export function UnifiedChat({
 
           images = ingestResult.images;
           if (!activeConfig.vision && images.length > 0) {
-            toast.warning(
+            void message.warning(
               t("warning.vision.disabled.images_ignored", {
                 count: images.length,
               }),
@@ -478,7 +500,7 @@ export function UnifiedChat({
         currentSession?.id,
         writePath === DEFAULT_WRITE_PATH ? undefined : writePath,
       );
-      toast.success(t("confirm.success", { count: result.inserted }));
+      void message.success(t("confirm.success", { count: result.inserted }));
       replaceDirty(false);
       replacePendingProposal(null);
       if (currentSession) {
@@ -492,7 +514,7 @@ export function UnifiedChat({
 
   async function discard() {
     resetSession();
-    toast.success(t("discard.done"));
+    void message.success(t("discard.done"));
   }
 
   // ── Derive Chat messages from agent state ──────────────────────────────
@@ -539,51 +561,47 @@ export function UnifiedChat({
         onLoadMore={() => void loadMoreSessions()}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-4">
-        {/* Callout for config status */}
         {!isConfigured && (
-          <Callout variant="warning">
-            {t("unified.callout.not_configured")}
-          </Callout>
+          <Alert
+            type="warning"
+            showIcon
+            message={t("unified.callout.not_configured")}
+          />
         )}
 
-        {/* Main Chat area */}
-        <div className="flex h-[32rem] max-h-[calc(100vh-12rem)] flex-col rounded-xl border p-4">
-          <div className="mb-3 flex items-center gap-2 border-b pb-3">
-            <span className="text-xs text-muted-foreground">
-              {t("chat.model")}
-            </span>
-            <Select
-              value={selectedModelValue}
-              onValueChange={(value) => {
-                const choice = parseModelChoice(value);
-                setSelectedProvider(choice.provider);
-                setSelectedModel(choice.model);
-              }}
-              disabled={Boolean(currentSession) || isProcessing || isGenerating}
-            >
-              <SelectTrigger
-                className="h-8 w-[18rem] max-w-full"
+        <Card
+          size="small"
+          className="favai-chat-card h-[32rem] max-h-[calc(100vh-12rem)]"
+          styles={{ body: { height: "100%", display: "flex", flexDirection: "column" } }}
+          title={
+            <Space size={8} wrap>
+              <label htmlFor="favai-model-select" className="text-xs">
+                {t("chat.model")}
+              </label>
+              <Select
+                id="favai-model-select"
+                value={selectedModelValue || undefined}
+                className="w-72 max-w-full"
                 title={currentSession ? t("chat.model.locked") : undefined}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableModelChoices.map((choice) => (
-                  <SelectItem
-                    key={modelChoiceValue(choice)}
-                    value={modelChoiceValue(choice)}
-                  >
-                    {choice.provider} / {choice.model}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {currentSession && (
-              <span className="text-xs text-muted-foreground">
-                {t("chat.model.locked")}
-              </span>
-            )}
-          </div>
+                disabled={Boolean(currentSession) || isProcessing || isGenerating}
+                options={availableModelChoices.map((choice) => ({
+                  value: modelChoiceValue(choice),
+                  label: `${choice.provider} / ${choice.model}`,
+                }))}
+                onChange={(value) => {
+                  const choice = parseModelChoice(value);
+                  setSelectedProvider(choice.provider);
+                  setSelectedModel(choice.model);
+                }}
+              />
+              {currentSession && (
+                <Typography.Text type="secondary" className="text-xs">
+                  {t("chat.model.locked")}
+                </Typography.Text>
+              )}
+            </Space>
+          }
+        >
           <Chat
             className="min-h-0 flex-1"
             messages={chatMessages}
@@ -602,107 +620,111 @@ export function UnifiedChat({
                 : t("chat.not.configured")
             }
           />
-        </div>
+        </Card>
 
-      {/* Confirmed imports are immutable history, not an active proposal. */}
-      {transactions && currentSession?.confirmed_at && (
-        <ImportedTransactions
-          transactions={transactions}
-          confirmedCount={currentSession.confirmed_count}
-        />
-      )}
+        {transactions && currentSession?.confirmed_at && (
+          <ImportedTransactions
+            transactions={transactions}
+            confirmedCount={currentSession.confirmed_count}
+          />
+        )}
 
-      {/* Editable proposal table */}
-      {transactions && !currentSession?.confirmed_at && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-medium">{t("proposal.title")}</h2>
-            {dirty && (
-              <Badge variant="secondary">{t("proposal.dirty.badge")}</Badge>
-            )}
-          </div>
+        {transactions && !currentSession?.confirmed_at && (
+          <Card
+            size="small"
+            title={
+              <Space>
+                <span>{t("proposal.title")}</span>
+                {dirty && <Tag>{t("proposal.dirty.badge")}</Tag>}
+              </Space>
+            }
+          >
+            <div className="flex flex-col gap-3">
+              {pendingProposal && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={t("proposal.new.available")}
+                  action={
+                    <Space size={4}>
+                      <Button
+                        size="small"
+                        type="primary"
+                        onClick={() => {
+                          replaceTransactions(pendingProposal);
+                          replacePendingProposal(null);
+                          replaceDirty(false);
+                          scheduleEditSave();
+                        }}
+                      >
+                        {t("proposal.new.apply")}
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          replacePendingProposal(null);
+                          scheduleEditSave();
+                        }}
+                      >
+                        {t("proposal.new.keep")}
+                      </Button>
+                    </Space>
+                  }
+                />
+              )}
 
-          {pendingProposal && (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-accent px-3 py-2 text-sm">
-              <span>{t("proposal.new.available")}</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  replaceTransactions(pendingProposal);
-                  replacePendingProposal(null);
-                  replaceDirty(false);
-                  scheduleEditSave();
-                }}
-              >
-                {t("proposal.new.apply")}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  replacePendingProposal(null);
-                  scheduleEditSave();
-                }}
-              >
-                {t("proposal.new.keep")}
-              </Button>
+              {transactions.length > 0 ? (
+                <ProposalTable
+                  transactions={transactions}
+                  accounts={accounts}
+                  onChange={(next) => {
+                    replaceTransactions(next);
+                    replaceDirty(true);
+                    scheduleEditSave();
+                  }}
+                />
+              ) : (
+                <Empty description={t("proposal.empty")} />
+              )}
+
+              <Space wrap align="end">
+                {status && status.source_files.length > 0 && (
+                  <Form.Item
+                    label={t("confirm.write.path")}
+                    style={{ marginBottom: 0, minWidth: 256 }}
+                  >
+                    <Select
+                      value={writePath}
+                      onChange={setWritePath}
+                      options={[
+                        {
+                          value: DEFAULT_WRITE_PATH,
+                          label: t("confirm.write.default", {
+                            path: status.default_write_path,
+                          }),
+                        },
+                        ...status.source_files.map((path) => ({
+                          value: path,
+                          label: path,
+                        })),
+                      ]}
+                    />
+                  </Form.Item>
+                )}
+                <Button
+                  type="primary"
+                  onClick={() => void confirm()}
+                  disabled={isGenerating || transactions.length === 0}
+                >
+                  {t("confirm.submit")}
+                </Button>
+                <Button onClick={() => void discard()} disabled={isGenerating}>
+                  {t("discard.submit")}
+                </Button>
+              </Space>
             </div>
-          )}
-
-          {transactions.length > 0 ? (
-            <ProposalTable
-              transactions={transactions}
-              accounts={accounts}
-              onChange={(next) => {
-                replaceTransactions(next);
-                replaceDirty(true);
-                scheduleEditSave();
-              }}
-            />
-          ) : (
-            <div className="rounded-lg border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
-              {t("proposal.empty")}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-end gap-2">
-            {status && status.source_files.length > 0 && (
-              <div className="flex min-w-64 flex-col gap-1">
-                <label className="text-xs text-muted-foreground">
-                  {t("confirm.write.path")}
-                </label>
-                <Select value={writePath} onValueChange={setWritePath}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={DEFAULT_WRITE_PATH}>
-                      {t("confirm.write.default", {
-                        path: status.default_write_path,
-                      })}
-                    </SelectItem>
-                    {status.source_files.map((path) => (
-                      <SelectItem key={path} value={path}>
-                        {path}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <Button
-              onClick={confirm}
-              disabled={isGenerating || transactions.length === 0}
-            >
-              {t("confirm.submit")}
-            </Button>
-            <Button variant="outline" onClick={discard} disabled={isGenerating}>
-              {t("discard.submit")}
-            </Button>
-          </div>
-        </div>
-      )}
+          </Card>
+        )}
       </div>
     </div>
   );
