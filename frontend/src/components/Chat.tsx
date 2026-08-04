@@ -256,11 +256,17 @@ export function Chat({
             variant: "filled",
             shape: "default",
             avatar: <UserOutlined />,
+            styles: {
+              content: {
+                minHeight: 32,
+                padding: "4px 12px",
+              },
+            },
             contentRender: (message: ChatMessage) => <MessageContent message={message} />,
           },
           ai: {
             placement: "start",
-            variant: "borderless",
+            variant: "filled",
             avatar: <RobotOutlined />,
             loadingRender: () => (
               <Flex gap={8} align="center">
