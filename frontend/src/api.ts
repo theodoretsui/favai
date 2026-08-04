@@ -8,6 +8,8 @@
 export interface Status {
   configured: boolean;
   ocr_available: boolean;
+  source_files: string[];
+  default_write_path: string;
 }
 
 export type ApiKind = "openai-completions" | "anthropic-messages";
@@ -50,6 +52,7 @@ export interface Transaction {
 
 export interface ImportConfirmResult {
   inserted: number;
+  write_path: string | null;
 }
 
 export interface SessionSummary {
@@ -151,10 +154,15 @@ export const api = {
       body: form,
     });
   },
-  importConfirm: (transactions: Transaction[], sessionId?: string) =>
+  importConfirm: (
+    transactions: Transaction[],
+    sessionId?: string,
+    writePath?: string,
+  ) =>
     postJson<ImportConfirmResult>("import_confirm", {
       transactions,
       session_id: sessionId,
+      write_path: writePath,
     }),
   listSessions: (offset = 0, limit = 30) =>
     request<SessionListResult>(`sessions?limit=${limit}&offset=${offset}`),

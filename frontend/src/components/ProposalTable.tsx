@@ -109,6 +109,24 @@ export function ProposalTable({
                 }
               />
             </div>
+            <div className="flex min-w-40 flex-1 flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">
+                {t("proposal.tags")}
+              </Label>
+              <Input
+                key={(txn.tags ?? []).join(",")}
+                defaultValue={(txn.tags ?? []).map((tag) => `#${tag}`).join(" ")}
+                placeholder={t("proposal.tags.placeholder")}
+                onBlur={(e) =>
+                  updateTxn(txnIndex, {
+                    tags: e.target.value
+                      .split(/[,\s]+/)
+                      .map((tag) => tag.trim().replace(/^#/, ""))
+                      .filter(Boolean),
+                  })
+                }
+              />
+            </div>
             <Button
               variant="ghost"
               size="icon-sm"
