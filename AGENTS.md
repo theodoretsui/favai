@@ -15,7 +15,7 @@ Node.js; it is only used to build the frontend.
 ## Technology Stack
 
 - Backend: Python >= 3.12, Fava, httpx, pypdf, and optional PaddleOCR.
-- Frontend: TypeScript, React, Tailwind CSS, shadcn/ui, Vite,
+- Frontend: TypeScript, React, Tailwind CSS, Ant Design X, Ant Design, Vite,
   `pi-agent-core`, and `pi-ai`.
 - Tooling: uv and hatchling for Python; npm and Vite for the frontend;
   pytest and Ruff for verification.

@@ -13,8 +13,6 @@
  */
 @import "tailwindcss/theme.css";
 @import "tailwindcss/utilities.css";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -142,7 +140,7 @@
 /*
  * Minimal, scoped normalization. Without preflight, elements inside the
  * extension inherit fava's page styles; these rules restore just enough
- * sanity for shadcn/ui components without touching anything outside
+ * sanity for Ant Design components without touching anything outside
  * `.favai-root`.
  */
 @layer base {
@@ -163,6 +161,10 @@
     .favai-root :where(button, input, select, textarea) {
         font: inherit;
         color: inherit;
+    }
+    /* Fava gives bare inputs a white background; Ant controls own the surface. */
+    .favai-root :where(.favai-input, .favai-input-number-input) {
+        background-color: transparent !important;
     }
     .favai-root :where(button:not(:disabled)) {
         cursor: pointer;

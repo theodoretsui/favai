@@ -1,18 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { SettingsIcon } from "lucide-react";
+import { SettingOutlined } from "@ant-design/icons";
+import { Alert, Button, Modal, Space, Tag, Typography } from "antd";
 
 import { api, type Config, type Status } from "@/api";
 import { t } from "@/i18n";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Toaster } from "@/components/ui/sonner";
 import { UnifiedChat } from "@/components/UnifiedChat";
 import { SettingsForm } from "@/components/SettingsTab";
 
@@ -41,53 +32,48 @@ export default function App() {
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold">{t("chat.title")}</h1>
+        <Space size={8}>
+          <Typography.Title level={2} style={{ margin: 0, fontSize: 20 }}>
+            {t("chat.title")}
+          </Typography.Title>
           {status && (
-            <Badge variant={status.configured ? "default" : "destructive"}>
+            <Tag color={status.configured ? undefined : "error"}>
               {status.configured
                 ? t("settings.status.configured")
                 : t("settings.status.not.configured")}
-            </Badge>
+            </Tag>
           )}
-        </div>
-        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-          <DialogTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              title={t("settings.title")}
-              className={
-                status && !status.configured
-                  ? "border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:border-amber-400/40 dark:text-amber-400 dark:hover:bg-amber-950"
-                  : ""
-              }
-            >
-              <SettingsIcon />
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>{t("settings.title")}</DialogTitle>
-            </DialogHeader>
-            <SettingsForm status={status} onStatusChange={onConfigSaved} />
-          </DialogContent>
-        </Dialog>
+        </Space>
+        <Button
+          icon={<SettingOutlined />}
+          title={t("settings.title")}
+          danger={Boolean(status && !status.configured)}
+          onClick={() => setSettingsOpen(true)}
+        />
       </div>
 
       {!config && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
-          {t("import.not.configured")}
-        </div>
+        <Alert
+          type="error"
+          showIcon
+          message={t("import.not.configured")}
+        />
       )}
 
-      {/* Main chat interface */}
       <UnifiedChat config={config} status={status} />
 
-      {/* Sonner renders inline (no portal), so it inherits .favai-root vars */}
-      <Toaster position="top-center" expand />
+      <Modal
+        title={t("settings.title")}
+        open={settingsOpen}
+        width={600}
+        footer={null}
+        destroyOnHidden
+        styles={{ body: { maxHeight: "calc(100vh - 160px)", overflowY: "auto" } }}
+        onCancel={() => setSettingsOpen(false)}
+      >
+        <SettingsForm onStatusChange={onConfigSaved} />
+      </Modal>
     </div>
   );
 }

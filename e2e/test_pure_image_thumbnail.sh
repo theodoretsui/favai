@@ -56,15 +56,15 @@ textarea.dispatchEvent(new DragEvent("drop", {
 }));
 JS
 
-agent-browser --session "$browser_session" wait 'img[alt="Attachment thumbnail.png"]'
+agent-browser --session "$browser_session" wait 'img[alt="thumbnail.png"]'
 agent-browser --session "$browser_session" find role button click --name "Send message"
 agent-browser --session "$browser_session" wait --text "图片已处理。"
-agent-browser --session "$browser_session" wait 'img[alt="Attachment image-1"]'
+agent-browser --session "$browser_session" wait 'img[alt="image-1"]'
 
 # Assert both the visible thumbnail and the persisted pi-ai image shape.
 agent-browser --session "$browser_session" eval --stdin <<'JS'
 (async () => {
-const thumbnail = document.querySelector('img[alt="Attachment image-1"]');
+const thumbnail = document.querySelector('img[alt="image-1"]');
 if (!thumbnail || thumbnail.clientWidth === 0 || thumbnail.clientHeight === 0) {
   throw new Error("submitted image thumbnail is not visible");
 }
