@@ -36,6 +36,9 @@ favai-prefetch-ocr = "favai.cli_prefetch:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+artifacts = ["src/favai/FavaAI.js"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/favai"]
 

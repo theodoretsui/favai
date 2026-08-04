@@ -63,6 +63,10 @@ uv sync
 cd frontend && npm install && npm run build && cd ..
 ```
 
+`src/favai/FavaAI.js` is generated and intentionally not tracked by Git.
+Release CI builds it before creating the wheel and source distribution, so
+installing the published package does not require Node.js.
+
 ### Configure Fava
 
 Add the extension to your Beancount file:
