@@ -1,5 +1,9 @@
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, Space, Table } from "antd";
+import {
+  DeleteOutlined,
+  PlusOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
+import { Button, Card, Form, Input, Space, Table, Tag } from "antd";
 
 import type { Posting, Transaction } from "@/api";
 import { t } from "@/i18n";
@@ -51,24 +55,36 @@ export function ProposalTable({
 
   return (
     <div className="flex flex-col gap-3">
-      {transactions.map((txn, txnIndex) => (
-        <Card
-          key={txnIndex}
-          size="small"
-          extra={
-            <Button
-              type="text"
-              danger
-              icon={<DeleteOutlined />}
-              title={t("proposal.transaction.remove")}
-              onClick={() =>
-                onChange(transactions.filter((_, index) => index !== txnIndex))
-              }
-            />
-          }
-        >
+      {transactions.map((txn, txnIndex) => {
+        const incomplete = txn.flag === "incomplete";
+        return (
+          <Card
+            key={txnIndex}
+            size="small"
+            className={incomplete ? "favai-proposal-incomplete" : undefined}
+            extra={
+              <Space size={4}>
+                {incomplete && (
+                  <Tag color="warning" icon={<WarningOutlined />}>
+                    {t("proposal.flag.incomplete")}
+                  </Tag>
+                )}
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  title={t("proposal.transaction.remove")}
+                  onClick={() =>
+                    onChange(
+                      transactions.filter((_, index) => index !== txnIndex),
+                    )
+                  }
+                />
+              </Space>
+            }
+          >
           <div className="grid grid-cols-1 gap-x-2 md:grid-cols-12">
-            <Form.Item className="md:col-span-2" label={t("proposal.date")}>
+            <Form.Item className="md:col-span-3" label={t("proposal.date")}>
               <Input
                 type="date"
                 value={txn.date}
@@ -86,7 +102,7 @@ export function ProposalTable({
               />
             </Form.Item>
             <Form.Item
-              className="md:col-span-4"
+              className="md:col-span-3"
               label={t("proposal.narration")}
             >
               <Input
@@ -186,8 +202,9 @@ export function ProposalTable({
               {t("proposal.posting.add")}
             </Button>
           </Space>
-        </Card>
-      ))}
+          </Card>
+        );
+      })}
     </div>
   );
 }

@@ -190,4 +190,9 @@
     .favai-root .favai-settings-form .favai-form-item-label {
         padding-bottom: 4px !important;
     }
+    .favai-root .favai-proposal-incomplete {
+        border-color: #faad14 !important;
+        box-shadow: 0 0 0 1px rgb(250 173 20 / 35%),
+            0 0 14px rgb(250 173 20 / 24%);
+    }
 }
