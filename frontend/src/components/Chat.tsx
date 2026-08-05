@@ -277,6 +277,8 @@ export function Chat({
             avatar: <UserOutlined />,
             styles: {
               content: {
+                display: "flex",
+                alignItems: "center",
                 minHeight: 32,
                 padding: "4px 12px",
               },
