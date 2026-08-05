@@ -8,7 +8,7 @@
  */
 import type { Message as PiAiMessage } from "@earendil-works/pi-ai";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ChatMessage } from "@/agent/chatTypes";
+import type { ChatMessage, ToolInvocation } from "@/agent/chatTypes";
 
 interface ToolResultLookup {
   result: unknown;
@@ -51,13 +51,40 @@ export function toChatMessages(
 
   const out: ChatMessage[] = [];
   for (const msg of committed) {
-    out.push(toChatMessage(msg, resultsById));
+    // Tool results are protocol messages, not standalone chat messages. Their
+    // content is already attached to the matching assistant tool call above.
+    if (msg.role === "toolResult") continue;
+    appendChatMessage(out, toChatMessage(msg, resultsById));
   }
   if (streaming) {
-    out.push(toChatMessage(streaming, resultsById));
+    appendChatMessage(out, toChatMessage(streaming, resultsById));
   }
 
   return out;
+}
+
+/** Keep every assistant step after one user message in a single UI bubble. */
+function appendChatMessage(out: ChatMessage[], message: ChatMessage): void {
+  const previous = out.at(-1);
+  if (previous?.role !== "assistant" || message.role !== "assistant") {
+    out.push(message);
+    return;
+  }
+
+  out[out.length - 1] = {
+    ...previous,
+    content: previous.content + message.content,
+    parts: mergeOptional(previous.parts, message.parts),
+    toolInvocations: mergeOptional(
+      previous.toolInvocations,
+      message.toolInvocations,
+    ),
+  };
+}
+
+function mergeOptional<T>(left?: T[], right?: T[]): T[] | undefined {
+  const merged = [...(left ?? []), ...(right ?? [])];
+  return merged.length > 0 ? merged : undefined;
 }
 
 function toChatMessage(
@@ -119,20 +146,20 @@ function toChatMessage(
       parts.push({ type: "reasoning", reasoning: block.thinking });
     } else if (block.type === "toolCall") {
       const matched = resultsById.get(block.id);
-      if (matched) {
-        toolInvocations.push({
+      const invocation: ToolInvocation = matched
+        ? {
           state: "result",
           toolName: block.name,
           result: matched.isError
             ? { __error: true, ...asObject(matched.result) }
             : asObject(matched.result),
-        });
-      } else {
-        toolInvocations.push({
+        }
+        : {
           state: "call",
           toolName: block.name,
-        });
-      }
+        };
+      toolInvocations.push(invocation);
+      parts.push({ type: "tool-invocation", toolInvocation: invocation });
     }
   }
 
