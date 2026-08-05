@@ -18,12 +18,16 @@ export function buildModels(config: Config): BuiltModels {
   // Keep the pi-ai provider identity stable for transcript compatibility;
   // the backend routing header selects the concrete stored provider config.
   const providerId = "favai";
+  const modelId = `${config.provider}/${config.model}`;
   const input: ("text" | "image")[] = config.vision
     ? ["text", "image"]
     : ["text"];
 
   const model: Model<"openai-completions" | "anthropic-messages"> = {
-    id: config.model,
+    // Qualify the SDK-facing id so providers that expose the same model name
+    // remain distinct in requests and transcripts.  The backend removes this
+    // routing prefix before forwarding the request upstream.
+    id: modelId,
     name: config.model,
     api: config.api,
     provider: providerId,
