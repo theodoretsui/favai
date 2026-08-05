@@ -67,11 +67,9 @@ function ToolSteps({ invocations }: { invocations: ToolInvocation[] }) {
 }
 
 function MessageContent({ message }: { message: ChatMessage }) {
-  const textParts = message.parts?.filter((part) => part.type === "text") ?? [];
-  const reasoningParts = message.parts?.filter((part) => part.type === "reasoning") ?? [];
-  const visibleText = textParts.length > 0
-    ? textParts.map((part) => part.type === "text" ? part.text : "").join("")
-    : message.content;
+  const orderedParts = message.parts ?? [];
+  const hasTextPart = orderedParts.some((part) => part.type === "text");
+  const hasToolPart = orderedParts.some((part) => part.type === "tool-invocation");
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -101,21 +99,42 @@ function MessageContent({ message }: { message: ChatMessage }) {
           }]}
         />
       ))}
-      {reasoningParts.length > 0 && (
-        <ThoughtChain
-          items={reasoningParts.map((part, index) => ({
-            key: String(index),
-            title: t("chat.reasoning"),
-            icon: <RobotOutlined />,
-            collapsible: true,
-            content: part.type === "reasoning" ? (
-              <div className="whitespace-pre-wrap text-xs">{part.reasoning}</div>
-            ) : null,
-          }))}
-        />
+      {orderedParts.map((part, index) => {
+        if (part.type === "reasoning") {
+          return (
+            <ThoughtChain
+              key={`reasoning-${index}`}
+              items={[{
+                key: String(index),
+                title: t("chat.reasoning"),
+                icon: <RobotOutlined />,
+                collapsible: true,
+                content: (
+                  <div className="whitespace-pre-wrap text-xs">{part.reasoning}</div>
+                ),
+              }]}
+            />
+          );
+        }
+        if (part.type === "text") {
+          return part.text ? (
+            <MarkdownRenderer key={`text-${index}`}>{part.text}</MarkdownRenderer>
+          ) : null;
+        }
+        if (part.type === "tool-invocation") {
+          return (
+            <ToolSteps
+              key={`tool-${index}`}
+              invocations={[part.toolInvocation]}
+            />
+          );
+        }
+        return null;
+      })}
+      {!hasTextPart && message.content && (
+        <MarkdownRenderer>{message.content}</MarkdownRenderer>
       )}
-      {visibleText && <MarkdownRenderer>{visibleText}</MarkdownRenderer>}
-      {message.toolInvocations && message.toolInvocations.length > 0 && (
+      {!hasToolPart && message.toolInvocations && message.toolInvocations.length > 0 && (
         <ToolSteps invocations={message.toolInvocations} />
       )}
     </div>
