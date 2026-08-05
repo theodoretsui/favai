@@ -32,6 +32,61 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         payload = json.loads(self.rfile.read(length))
         messages = payload.get("messages", [])
+        is_tool_bubble_test = any(
+            "E2E_TOOL_RESULT_BUBBLE" in _message_text(message) for message in messages
+        )
+        tool_results = [
+            message for message in messages if message.get("role") == "tool"
+        ]
+
+        if is_tool_bubble_test:
+            expected_ids = ["e2e-today-call-1", "e2e-today-call-2"]
+            actual_ids = [message.get("tool_call_id") for message in tool_results]
+            if actual_ids != expected_ids[: len(actual_ids)]:
+                self.send_error(400, "unexpected tool_call_id sequence")
+                return
+            self._start_stream()
+            if len(tool_results) == 0:
+                self._chunk({"role": "assistant", "content": ""})
+                self._chunk({"reasoning_content": "第一步思考。"})
+                self._chunk(
+                    {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "e2e-today-call-1",
+                                "type": "function",
+                                "function": {"name": "today", "arguments": "{}"},
+                            }
+                        ]
+                    }
+                )
+                self._chunk({}, finish_reason="tool_calls")
+            elif len(tool_results) == 1:
+                self._chunk({"role": "assistant", "content": ""})
+                self._chunk({"reasoning_content": "第二步思考。"})
+                self._chunk({"content": "中间输出。"})
+                self._chunk(
+                    {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "e2e-today-call-2",
+                                "type": "function",
+                                "function": {"name": "today", "arguments": "{}"},
+                            }
+                        ]
+                    }
+                )
+                self._chunk({}, finish_reason="tool_calls")
+            else:
+                self._chunk({"role": "assistant", "content": ""})
+                self._chunk({"reasoning_content": "第三步思考。"})
+                self._chunk({"content": "最终输出。"})
+                self._chunk({}, finish_reason="stop")
+            self.wfile.write(b"data: [DONE]\n\n")
+            return
+
         has_image = any(
             isinstance(message.get("content"), list)
             and any(block.get("type") == "image_url" for block in message["content"])
@@ -44,10 +99,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(b'{"error":{"message":"missing image_url"}}')
             return
 
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.send_header("Cache-Control", "no-cache")
-        self.end_headers()
+        self._start_stream()
         self._chunk({"role": "assistant", "content": ""})
         self._chunk({"content": "图片已处理。"})
         self._chunk({}, finish_reason="stop")
@@ -66,8 +118,27 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(f"data: {json.dumps(body)}\n\n".encode())
         self.wfile.flush()
 
+    def _start_stream(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+
     def log_message(self, format: str, *args: object) -> None:
         return
+
+
+def _message_text(message: dict[str, Any]) -> str:
+    content = message.get("content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and isinstance(block.get("text"), str)
+        )
+    return ""
 
 
 def main() -> None:
