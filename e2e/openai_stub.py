@@ -35,6 +35,9 @@ class Handler(BaseHTTPRequestHandler):
         is_tool_bubble_test = any(
             "E2E_TOOL_RESULT_BUBBLE" in _message_text(message) for message in messages
         )
+        is_proposal_warning_test = any(
+            "E2E_PROPOSAL_WARNING" in _message_text(message) for message in messages
+        )
         tool_results = [
             message for message in messages if message.get("role") == "tool"
         ]
@@ -83,6 +86,53 @@ class Handler(BaseHTTPRequestHandler):
                 self._chunk({"role": "assistant", "content": ""})
                 self._chunk({"reasoning_content": "第三步思考。"})
                 self._chunk({"content": "最终输出。"})
+                self._chunk({}, finish_reason="stop")
+            self.wfile.write(b"data: [DONE]\n\n")
+            return
+
+        if is_proposal_warning_test:
+            self._start_stream()
+            self._chunk({"role": "assistant", "content": ""})
+            if not tool_results:
+                arguments = json.dumps(
+                    {
+                        "transactions": [
+                            {
+                                "date": "2026-08-05",
+                                "flag": "incomplete",
+                                "payee": "待确认商户",
+                                "narration": "待确认消费",
+                                "postings": [
+                                    {
+                                        "account": "Expenses:Test",
+                                        "amount": "12.34",
+                                        "currency": "CNY",
+                                    },
+                                    {"account": "Assets:Cash", "currency": "CNY"},
+                                ],
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                )
+                self._chunk(
+                    {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "e2e-proposal-warning-call",
+                                "type": "function",
+                                "function": {
+                                    "name": "propose_transactions",
+                                    "arguments": arguments,
+                                },
+                            }
+                        ]
+                    }
+                )
+                self._chunk({}, finish_reason="tool_calls")
+            else:
+                self._chunk({"content": "待确认提案已提交。"})
                 self._chunk({}, finish_reason="stop")
             self.wfile.write(b"data: [DONE]\n\n")
             return

@@ -28,6 +28,7 @@ def test_to_fava_entry_shape():
     entry = to_fava_entry(VALID, "CNY")
     assert entry["t"] == "Transaction"
     assert entry["date"] == "2026-07-20"
+    assert entry["flag"] == "*"
     assert entry["payee"] == "海底捞"
     assert entry["postings"][0] == {
         "account": "Expenses:Food:Restaurant",
@@ -37,6 +38,12 @@ def test_to_fava_entry_shape():
         "account": "Assets:CN:Alipay",
         "amount": "",
     }
+
+
+def test_incomplete_flag_uses_beancount_warning_flag():
+    entry = to_fava_entry({**VALID, "flag": "incomplete"}, "CNY")
+
+    assert entry["flag"] == "!"
 
 
 def test_explicit_currency():
@@ -86,6 +93,7 @@ def test_invalid_tag(tag):
             "金额格式无效",
         ),
         ({**VALID, "postings": [{"amount": "1"}, {"account": "C:D"}]}, "缺少 account"),
+        ({**VALID, "flag": "unknown"}, "flag 无效"),
     ],
 )
 def test_invalid_transactions(txn, match):

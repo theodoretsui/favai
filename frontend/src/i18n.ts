@@ -73,6 +73,7 @@ const zhCN = {
   "proposal.posting.add": "添加分录",
   "proposal.posting.remove": "删除该行",
   "proposal.transaction.remove": "删除此交易",
+  "proposal.flag.incomplete": "待确认",
   "proposal.dirty.badge": "已手动修改",
 
   "account.search.placeholder": "搜索或输入新账户…",
@@ -219,6 +220,7 @@ const en: Record<I18nKey, string> = {
   "proposal.posting.add": "Add posting",
   "proposal.posting.remove": "Remove row",
   "proposal.transaction.remove": "Delete transaction",
+  "proposal.flag.incomplete": "Needs review",
   "proposal.dirty.badge": "Edited",
 
   "account.search.placeholder": "Search or type a new account…",

@@ -28,7 +28,8 @@ export function buildImportPrompt(
 4. 每次调用工具时，一次性提交所有已识别的交易——不要在后续轮次再次提交之前已提交的交易。
 5. 不要添加不在账单中的虚构交易。
 6. 所有金额为正数。Expenses 和 Assets 类账户金额为正，表示支出在 Expenses 扣除，Assets 减少。
-7. 直接使用 propose_transactions 工具提交交易供用户预览，不要向用户提问确认。用户会在预览表中查看和编辑结果。`;
+7. 为每笔交易设置 flag：信息可信且无需复核时使用 complete；存在不确定信息、需要用户确认或修改时使用 incomplete。
+8. 直接使用 propose_transactions 工具提交交易供用户预览，不要向用户提问确认。用户会在预览表中查看和编辑结果。`;
 
   parts.push(rules);
 
@@ -118,7 +119,8 @@ export const UNIFIED_SYSTEM_PROMPT = `你是一个专业的记账助手，同时
 6. 每次调用工具时，一次性提交所有已识别的交易——不要在后续轮次再次提交之前已提交的交易。
 7. 不要添加不在账单中的虚构交易。
 8. 所有金额为正数。Expenses 和 Assets 类账户金额为正，表示支出在 Expenses 扣除，Assets 减少。
-9. 直接使用 propose_transactions 工具提交交易供用户预览，不要向用户提问确认。
+9. 为每笔交易设置 flag：信息可信且无需复核时使用 complete；存在不确定信息、需要用户确认或修改时使用 incomplete。
+10. 直接使用 propose_transactions 工具提交交易供用户预览，不要向用户提问确认。
 
 ## 账本分析
 当用户询问账本数据相关的问题时，使用 bql_query 工具查询。

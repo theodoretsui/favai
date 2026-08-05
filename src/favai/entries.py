@@ -58,10 +58,16 @@ def to_fava_entry(txn: dict[str, Any], default_currency: str = "CNY") -> dict[st
     if len(unspecified) > 1:
         msg = f"交易「{txn.get('narration', '?')}」有多条 postings 缺少金额"
         raise EntryError(msg)
+    proposal_flag = str(txn.get("flag") or "complete").strip()
+    try:
+        flag = {"complete": "*", "incomplete": "!"}[proposal_flag]
+    except KeyError as exc:
+        msg = f"交易 flag 无效：{proposal_flag!r}"
+        raise EntryError(msg) from exc
     return {
         "t": "Transaction",
         "date": date,
-        "flag": "*",
+        "flag": flag,
         "payee": str(txn.get("payee") or ""),
         "narration": str(txn.get("narration") or ""),
         "tags": [_normalise_tag(tag) for tag in txn.get("tags") or []],

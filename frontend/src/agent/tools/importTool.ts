@@ -22,6 +22,10 @@ const PostingSchema = Type.Object({
 
 const TransactionSchema = Type.Object({
   date: Type.String({ description: "日期，YYYY-MM-DD" }),
+  flag: Type.Union([Type.Literal("complete"), Type.Literal("incomplete")], {
+    description:
+      "交易状态：信息可信且无需复核时为 complete；存在不确定信息、需要用户确认或修改时为 incomplete",
+  }),
   payee: Type.Optional(Type.String({ description: "收款方/交易对手" })),
   narration: Type.String({ description: "交易摘要" }),
   postings: Type.Array(PostingSchema, {
@@ -183,6 +187,7 @@ export function makeImportTool(
     execute: async (_toolCallId, params, _signal) => {
       const txns = (params.transactions as Transaction[]).map((txn) => ({
         ...txn,
+        flag: txn.flag ?? "complete",
         tags: txn.tags?.map((tag) => tag.trim().replace(/^#/, "")),
       }));
       const { accounts } = getLedgerData();

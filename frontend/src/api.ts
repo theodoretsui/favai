@@ -39,6 +39,7 @@ export interface Posting {
 
 export interface Transaction {
   date: string;
+  flag?: "complete" | "incomplete";
   payee?: string;
   narration: string;
   postings: Posting[];
