@@ -105,6 +105,18 @@ def load_configs(data_dir: Path) -> tuple[str, list[ProviderConfig]]:
     raise ConfigError("config.json 必须是配置数组")
 
 
+def load_bookkeeping_habits(data_dir: Path) -> str:
+    """Load the ledger-wide bookkeeping habits from configuration."""
+    path = _config_path(data_dir)
+    if not path.exists():
+        return ""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        return ""
+    habits = raw.get("bookkeeping_habits", "")
+    return habits if isinstance(habits, str) else ""
+
+
 def load_config(data_dir: Path, provider: str | None = None) -> ProviderConfig:
     """Load one provider config, falling back to defaults."""
     active_provider, configs = load_configs(data_dir)
@@ -120,7 +132,20 @@ def load_config(data_dir: Path, provider: str | None = None) -> ProviderConfig:
 
 def public_configs(data_dir: Path) -> list[dict[str, Any]]:
     """Return all stored configs with literal keys masked."""
-    return [config.to_public_dict() for config in load_configs(data_dir)[1]]
+    habits = load_bookkeeping_habits(data_dir)
+    configs = []
+    for config in load_configs(data_dir)[1]:
+        public = config.to_public_dict()
+        public["bookkeeping_habits"] = habits
+        configs.append(public)
+    return configs
+
+
+def public_config(data_dir: Path) -> dict[str, Any]:
+    """Return the active config plus ledger-wide preferences."""
+    public = load_config(data_dir).to_public_dict()
+    public["bookkeeping_habits"] = load_bookkeeping_habits(data_dir)
+    return public
 
 
 def config_from_public_payload(
@@ -172,9 +197,35 @@ def save_config(data_dir: Path, config: ProviderConfig) -> None:
     _, configs = load_configs(data_dir)
     updated = [existing for existing in configs if existing.provider != config.provider]
     updated.append(config)
+    _write_configs(data_dir, updated, load_bookkeeping_habits(data_dir))
+
+
+def save_bookkeeping_habits(data_dir: Path, habits: str) -> None:
+    """Save ledger-wide bookkeeping habits without changing providers."""
+    if not isinstance(habits, str):
+        raise ConfigError("bookkeeping_habits must be a string")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    active_provider, configs = load_configs(data_dir)
+    _write_configs(data_dir, configs, habits, active_provider=active_provider)
+
+
+def _write_configs(
+    data_dir: Path,
+    configs: list[ProviderConfig],
+    bookkeeping_habits: str,
+    *,
+    active_provider: str | None = None,
+) -> None:
+    """Write the current object-shaped configuration."""
+    if active_provider is None:
+        active_provider = configs[-1].provider if configs else ""
     _config_path(data_dir).write_text(
         json.dumps(
-            [asdict(item) for item in updated],
+            {
+                "active_provider": active_provider,
+                "bookkeeping_habits": bookkeeping_habits,
+                "providers": [asdict(item) for item in configs],
+            },
             indent=2,
             ensure_ascii=False,
         )
@@ -188,16 +239,15 @@ def delete_config(data_dir: Path, provider: str) -> None:
     provider = provider.strip()
     if not provider:
         raise ConfigError("provider is required")
-    _, configs = load_configs(data_dir)
+    active_provider, configs = load_configs(data_dir)
     updated = [config for config in configs if config.provider != provider]
     if len(updated) == len(configs):
         raise ConfigError(f"提供商 {provider!r} 尚未配置")
-    _config_path(data_dir).write_text(
-        json.dumps(
-            [asdict(item) for item in updated],
-            indent=2,
-            ensure_ascii=False,
-        )
-        + "\n",
-        encoding="utf-8",
+    if active_provider == provider:
+        active_provider = updated[-1].provider if updated else ""
+    _write_configs(
+        data_dir,
+        updated,
+        load_bookkeeping_habits(data_dir),
+        active_provider=active_provider,
     )

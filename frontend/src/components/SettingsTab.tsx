@@ -20,7 +20,7 @@ import {
 import { api, type ApiKind, type Config, type Status } from "@/api";
 import { t } from "@/i18n";
 
-function emptyConfig(): Config {
+function emptyConfig(bookkeepingHabits = ""): Config {
   return {
     provider: "",
     api: "openai-completions",
@@ -32,6 +32,7 @@ function emptyConfig(): Config {
     vision: false,
     context_window: 128_000,
     max_tokens: 16_384,
+    bookkeeping_habits: bookkeepingHabits,
   };
 }
 
@@ -59,7 +60,7 @@ export function SettingsForm({
       .then(([configs, activeConfig]) => {
         setStoredConfigs(configs);
         if (configs.length === 0) {
-          setConfig(emptyConfig());
+          setConfig(emptyConfig(activeConfig.bookkeeping_habits));
           setIsAdding(true);
           return;
         }
@@ -93,7 +94,7 @@ export function SettingsForm({
   }
 
   function startAddingProvider() {
-    setConfig(emptyConfig());
+    setConfig(emptyConfig(config?.bookkeeping_habits));
     setAvailableModels([]);
     setIsAdding(true);
   }
@@ -339,6 +340,22 @@ export function SettingsForm({
           aria-label={t("settings.vision")}
           checked={config.vision}
           onChange={(vision) => patch({ vision })}
+        />
+      </Form.Item>
+
+      <Form.Item
+        label={t("settings.bookkeeping_habits")}
+        htmlFor="favai-bookkeeping-habits"
+        extra={t("settings.bookkeeping_habits.help")}
+      >
+        <Input.TextArea
+          id="favai-bookkeeping-habits"
+          value={config.bookkeeping_habits}
+          placeholder={t("settings.bookkeeping_habits.placeholder")}
+          autoSize={{ minRows: 3, maxRows: 8 }}
+          onChange={(event) =>
+            patch({ bookkeeping_habits: event.target.value })
+          }
         />
       </Form.Item>
 

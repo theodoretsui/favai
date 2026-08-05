@@ -25,6 +25,7 @@ export interface Config {
   vision: boolean;
   context_window: number;
   max_tokens: number;
+  bookkeeping_habits: string;
 }
 
 export interface Posting {

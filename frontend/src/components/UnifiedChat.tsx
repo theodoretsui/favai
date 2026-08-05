@@ -25,7 +25,11 @@ import {
 } from "@/api";
 import { t } from "@/i18n";
 import { getLedgerData } from "@/agent/favaApi";
-import { buildImportPrompt, UNIFIED_SYSTEM_PROMPT } from "@/agent/prompts";
+import {
+  buildImportPrompt,
+  UNIFIED_SYSTEM_PROMPT,
+  withBookkeepingHabits,
+} from "@/agent/prompts";
 import { createUnifiedAgent } from "@/agent/factory";
 import {
   ingestContentBlock,
@@ -424,7 +428,10 @@ export function UnifiedChat({
             currentDate,
             ingestResult.warnings,
           );
-          agent.state.systemPrompt = `${UNIFIED_SYSTEM_PROMPT}\n\n${importContext}`;
+          agent.state.systemPrompt = `${withBookkeepingHabits(
+            UNIFIED_SYSTEM_PROMPT,
+            activeConfig.bookkeeping_habits,
+          )}\n\n${importContext}`;
           ingestTexts = ingestResult.texts;
 
           images = ingestResult.images;
@@ -441,7 +448,10 @@ export function UnifiedChat({
         }
       } else {
         // Chat mode: keep the base system prompt, send user message directly.
-        agent.state.systemPrompt = UNIFIED_SYSTEM_PROMPT;
+        agent.state.systemPrompt = withBookkeepingHabits(
+          UNIFIED_SYSTEM_PROMPT,
+          activeConfig.bookkeeping_habits,
+        );
       }
 
       if (ingestTexts.length > 0) {

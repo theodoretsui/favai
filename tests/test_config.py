@@ -11,8 +11,12 @@ from favai.config import (
     ProviderConfig,
     config_from_public_payload,
     delete_config,
+    load_bookkeeping_habits,
     load_config,
     load_configs,
+    public_config,
+    public_configs,
+    save_bookkeeping_habits,
     save_config,
 )
 
@@ -29,7 +33,34 @@ def test_roundtrip(tmp_path):
     save_config(tmp_path, config)
     assert load_config(tmp_path) == config
     raw = json.loads((tmp_path / "config.json").read_text())
-    assert raw == [config.__dict__]
+    assert raw == {
+        "active_provider": config.provider,
+        "bookkeeping_habits": "",
+        "providers": [config.__dict__],
+    }
+
+
+def test_bookkeeping_habits_are_ledger_wide_and_preserved(tmp_path):
+    first = ProviderConfig(provider="first", base_url="https://first", model="m")
+    second = ProviderConfig(provider="second", base_url="https://second", model="m")
+    save_config(tmp_path, first)
+    save_bookkeeping_habits(tmp_path, "餐饮使用 Expenses:Food")
+    save_config(tmp_path, second)
+
+    assert load_bookkeeping_habits(tmp_path) == "餐饮使用 Expenses:Food"
+    assert public_config(tmp_path)["bookkeeping_habits"] == "餐饮使用 Expenses:Food"
+    assert all(
+        item["bookkeeping_habits"] == "餐饮使用 Expenses:Food"
+        for item in public_configs(tmp_path)
+    )
+
+
+def test_legacy_array_config_has_empty_bookkeeping_habits(tmp_path):
+    config = ProviderConfig(base_url="https://x", model="m")
+    (tmp_path / "config.json").write_text(json.dumps([config.__dict__]))
+
+    assert load_config(tmp_path) == config
+    assert load_bookkeeping_habits(tmp_path) == ""
 
 
 def test_multiple_provider_configs_are_upserted(tmp_path):
@@ -94,7 +125,7 @@ def test_load_defaults_when_missing(tmp_path):
 def test_load_ignores_unknown_keys(tmp_path):
     save_config(tmp_path, ProviderConfig(base_url="https://x", model="m"))
     raw = json.loads((tmp_path / "config.json").read_text())
-    raw[0]["future_key"] = 1
+    raw["providers"][0]["future_key"] = 1
     (tmp_path / "config.json").write_text(json.dumps(raw))
     assert load_config(tmp_path).base_url == "https://x"
 

@@ -18,7 +18,9 @@ from favai.config import (
     data_dir_for,
     delete_config,
     load_config,
+    public_config,
     public_configs,
+    save_bookkeeping_habits,
     save_config,
 )
 from favai.entries import source_file_options, to_fava_entries, write_entries
@@ -136,7 +138,9 @@ class FavaAI(FavaExtensionBase):
                 current = ProviderConfig(provider=provider or "custom")
             config = config_from_public_payload(current, payload)
             save_config(self.data_dir, config)
-        return load_config(self.data_dir).to_public_dict()
+            if "bookkeeping_habits" in payload:
+                save_bookkeeping_habits(self.data_dir, payload["bookkeeping_habits"])
+        return public_config(self.data_dir)
 
     @extension_endpoint("provider_configs")
     @api_response

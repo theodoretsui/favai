@@ -8,7 +8,11 @@ import type { Config, Transaction } from "@/api";
 import { buildModels } from "@/agent/provider";
 import { makeImportTool } from "@/agent/tools/importTool";
 import { makeBqlTool } from "@/agent/tools/bqlTool";
-import { CHAT_SYSTEM_PROMPT, UNIFIED_SYSTEM_PROMPT } from "@/agent/prompts";
+import {
+  CHAT_SYSTEM_PROMPT,
+  UNIFIED_SYSTEM_PROMPT,
+  withBookkeepingHabits,
+} from "@/agent/prompts";
 import { makeTodayTool } from "@/agent/tools/dateTool";
 
 /**
@@ -47,7 +51,10 @@ export function createChatAgent(config: Config) {
 
   return new Agent({
     initialState: {
-      systemPrompt: CHAT_SYSTEM_PROMPT,
+      systemPrompt: withBookkeepingHabits(
+        CHAT_SYSTEM_PROMPT,
+        config.bookkeeping_habits,
+      ),
       model,
       tools: [makeBqlTool()],
     },
@@ -76,7 +83,10 @@ export function createUnifiedAgent(
 
   return new Agent({
     initialState: {
-      systemPrompt: UNIFIED_SYSTEM_PROMPT,
+      systemPrompt: withBookkeepingHabits(
+        UNIFIED_SYSTEM_PROMPT,
+        config.bookkeeping_habits,
+      ),
       model,
       tools: [makeImportTool(onProposal), makeBqlTool(), makeTodayTool()],
     },
