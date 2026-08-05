@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 
@@ -35,6 +36,7 @@ def test_create_and_list_session(tmp_path):
 
     assert session["title"] == "A conversation"
     assert session["messages"] == []
+    assert session["confirmed_transactions"] == []
     assert session["revision"] == 0
     assert session["model_provider"] == "openai"
     assert history_path(tmp_path).exists()
@@ -74,7 +76,44 @@ def test_schema_v1_migrates_model_provider(tmp_path):
         columns = {row[1] for row in connection.execute("PRAGMA table_info(sessions)")}
         version = connection.execute("PRAGMA user_version").fetchone()[0]
     assert "model_provider" in columns
-    assert version == 2
+    assert "confirmed_transactions_json" in columns
+    assert version == 3
+
+
+def test_schema_v2_moves_confirmed_proposal_to_written_history(tmp_path):
+    database = history_path(tmp_path)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    proposal = [{"date": "2026-08-01", "postings": []}]
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TABLE sessions (
+                id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0,
+                revision INTEGER NOT NULL DEFAULT 0,
+                model_provider TEXT NOT NULL DEFAULT '',
+                model_api TEXT NOT NULL DEFAULT '', model_name TEXT NOT NULL DEFAULT '',
+                messages_json TEXT NOT NULL DEFAULT '[]', proposal_json TEXT,
+                proposal_dirty INTEGER NOT NULL DEFAULT 0,
+                pending_proposal_json TEXT, confirmed_at TEXT, confirmed_count INTEGER
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO sessions (
+                id, title, created_at, updated_at, proposal_json,
+                confirmed_at, confirmed_count
+            ) VALUES ('confirmed', 'Confirmed', 'now', 'now', ?, 'now', 1)
+            """,
+            (json.dumps(proposal),),
+        )
+        connection.execute("PRAGMA user_version = 2")
+
+    migrated = get_session(tmp_path, "confirmed")
+
+    assert migrated["proposal"] is None
+    assert migrated["confirmed_transactions"] == proposal
 
 
 def test_save_roundtrip_and_revision(tmp_path):
@@ -140,12 +179,30 @@ def test_rename_confirm_and_archive(tmp_path):
         pending_proposal=[{"date": "2026-08-02", "postings": []}],
     )
 
-    confirmed = mark_confirmed(tmp_path, session["id"], count=2)
-    assert confirmed["confirmed_count"] == 2
+    first = saved["proposal"]
+    confirmed = mark_confirmed(tmp_path, session["id"], transactions=first)
+    assert confirmed["confirmed_count"] == 1
     assert confirmed["confirmed_at"]
-    assert confirmed["proposal"] == saved["proposal"]
+    assert confirmed["proposal"] is None
+    assert confirmed["confirmed_transactions"] == first
     assert confirmed["proposal_dirty"] == 0
     assert confirmed["pending_proposal"] is None
+
+    second = [{"date": "2026-08-03", "postings": []}]
+    saved_again = save_session(
+        tmp_path,
+        session["id"],
+        expected_revision=confirmed["revision"],
+        messages=[_message("again")],
+        proposal=second,
+    )
+    assert saved_again["proposal"] == second
+    assert saved_again["confirmed_transactions"] == first
+
+    confirmed_again = mark_confirmed(tmp_path, session["id"], transactions=second)
+    assert confirmed_again["proposal"] is None
+    assert confirmed_again["confirmed_count"] == 2
+    assert confirmed_again["confirmed_transactions"] == first + second
 
     archive_session(tmp_path, session["id"])
     assert list_sessions(tmp_path)["sessions"] == []

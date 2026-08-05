@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 MAX_STATE_BYTES = 8 * 1024 * 1024
 
 
@@ -58,6 +58,7 @@ def _migrate(connection: sqlite3.Connection) -> None:
                     proposal_json TEXT,
                     proposal_dirty INTEGER NOT NULL DEFAULT 0,
                     pending_proposal_json TEXT,
+                    confirmed_transactions_json TEXT NOT NULL DEFAULT '[]',
                     confirmed_at TEXT,
                     confirmed_count INTEGER
                 )
@@ -74,6 +75,24 @@ def _migrate(connection: sqlite3.Connection) -> None:
                 "ALTER TABLE sessions ADD COLUMN model_provider TEXT NOT NULL DEFAULT ''"
             )
             connection.execute("PRAGMA user_version = 2")
+        version = 2
+    if version < 3:
+        with connection:
+            connection.execute(
+                """
+                ALTER TABLE sessions ADD COLUMN confirmed_transactions_json
+                TEXT NOT NULL DEFAULT '[]'
+                """
+            )
+            connection.execute(
+                """
+                UPDATE sessions
+                SET confirmed_transactions_json = COALESCE(proposal_json, '[]'),
+                    proposal_json = NULL
+                WHERE confirmed_at IS NOT NULL
+                """
+            )
+            connection.execute("PRAGMA user_version = 3")
 
 
 def _encode(value: Any, field: str) -> str:
@@ -182,6 +201,9 @@ def get_session(data_dir: Path, session_id: str) -> dict[str, Any]:
     result["messages"] = _decode(result.pop("messages_json"))
     result["proposal"] = _decode(result.pop("proposal_json"))
     result["pending_proposal"] = _decode(result.pop("pending_proposal_json"))
+    result["confirmed_transactions"] = _decode(
+        result.pop("confirmed_transactions_json")
+    )
     result.pop("archived")
     return result
 
@@ -266,18 +288,42 @@ def archive_session(data_dir: Path, session_id: str) -> None:
             raise HistoryError("会话不存在")
 
 
-def mark_confirmed(data_dir: Path, session_id: str, *, count: int) -> dict[str, Any]:
-    """Record that a session's proposal was written to the ledger."""
+def mark_confirmed(
+    data_dir: Path, session_id: str, *, transactions: Any
+) -> dict[str, Any]:
+    """Move written transactions from the active proposal into session history."""
+    if not isinstance(transactions, list):
+        raise HistoryError("transactions 必须是数组")
     with _connect(data_dir) as connection:
+        row = connection.execute(
+            """
+            SELECT confirmed_transactions_json
+            FROM sessions WHERE id = ? AND archived = 0
+            """,
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            raise HistoryError("会话不存在")
+        confirmed_transactions = _decode(row["confirmed_transactions_json"]) or []
+        confirmed_transactions.extend(transactions)
+        confirmed_json = _encode(confirmed_transactions, "confirmed_transactions")
+        now = _now()
         cursor = connection.execute(
             """
             UPDATE sessions
             SET confirmed_at = ?, confirmed_count = ?, updated_at = ?,
+                confirmed_transactions_json = ?, proposal_json = NULL,
                 proposal_dirty = 0, pending_proposal_json = NULL,
                 revision = revision + 1
             WHERE id = ? AND archived = 0
             """,
-            (_now(), count, _now(), session_id),
+            (
+                now,
+                len(confirmed_transactions),
+                now,
+                confirmed_json,
+                session_id,
+            ),
         )
         if cursor.rowcount != 1:
             raise HistoryError("会话不存在")

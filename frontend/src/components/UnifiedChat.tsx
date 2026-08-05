@@ -486,6 +486,7 @@ export function UnifiedChat({
   async function confirm() {
     if (!transactions) return;
     try {
+      await flushScheduledEditSave();
       const result = await api.importConfirm(
         transactions,
         currentSession?.id,
@@ -495,7 +496,9 @@ export function UnifiedChat({
       replaceDirty(false);
       replacePendingProposal(null);
       if (currentSession) {
-        setSession(await api.getSession(currentSession.id));
+        const session = await api.getSession(currentSession.id);
+        setSession(session);
+        replaceTransactions(session.proposal);
       }
       await refreshSessions();
     } catch (err) {
@@ -635,14 +638,7 @@ export function UnifiedChat({
           />
         </Card>
 
-        {transactions && currentSession?.confirmed_at && (
-          <ImportedTransactions
-            transactions={transactions}
-            confirmedCount={currentSession.confirmed_count}
-          />
-        )}
-
-        {transactions && !currentSession?.confirmed_at && (
+        {transactions && (
           <Card
             size="small"
             title={
@@ -737,6 +733,14 @@ export function UnifiedChat({
               </Space>
             </div>
           </Card>
+        )}
+
+        {/* Confirmed imports are immutable history below the active proposal. */}
+        {currentSession && currentSession.confirmed_transactions.length > 0 && (
+          <ImportedTransactions
+            transactions={currentSession.confirmed_transactions}
+            confirmedCount={currentSession.confirmed_count}
+          />
         )}
       </div>
     </div>
