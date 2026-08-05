@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
-import { SettingOutlined } from "@ant-design/icons";
+import { BookOutlined, SettingOutlined } from "@ant-design/icons";
 import { Alert, Button, Modal, Space, Tag, Typography } from "antd";
 
 import { api, type Config, type Status } from "@/api";
 import { t } from "@/i18n";
 import { UnifiedChat } from "@/components/UnifiedChat";
 import { SettingsForm } from "@/components/SettingsTab";
+import { BookkeepingHabitsForm } from "@/components/BookkeepingHabits";
 
 export default function App() {
   const [status, setStatus] = useState<Status | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
+  const [bookkeepingHabits, setBookkeepingHabits] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [habitsOpen, setHabitsOpen] = useState(false);
 
   const refreshConfig = useCallback(() => {
     api.getConfig().then(setConfig).catch(() => {});
@@ -18,6 +21,10 @@ export default function App() {
 
   useEffect(() => {
     api.status().then(setStatus).catch(() => {});
+    api
+      .getBookkeepingHabits()
+      .then((result) => setBookkeepingHabits(result.bookkeeping_habits))
+      .catch(() => {});
     refreshConfig();
   }, [refreshConfig]);
 
@@ -45,12 +52,23 @@ export default function App() {
             </Tag>
           )}
         </Space>
-        <Button
-          icon={<SettingOutlined />}
-          title={t("settings.title")}
-          danger={Boolean(status && !status.configured)}
-          onClick={() => setSettingsOpen(true)}
-        />
+        <Space size={8}>
+          <Button
+            icon={<BookOutlined />}
+            title={t("bookkeeping_habits.title")}
+            aria-label={t("bookkeeping_habits.title")}
+            onClick={() => setHabitsOpen(true)}
+          >
+            {t("bookkeeping_habits.title")}
+          </Button>
+          <Button
+            icon={<SettingOutlined />}
+            title={t("settings.title")}
+            aria-label={t("settings.title")}
+            danger={Boolean(status && !status.configured)}
+            onClick={() => setSettingsOpen(true)}
+          />
+        </Space>
       </div>
 
       {!config && (
@@ -61,7 +79,29 @@ export default function App() {
         />
       )}
 
-      <UnifiedChat config={config} status={status} />
+      <UnifiedChat
+        config={config}
+        status={status}
+        bookkeepingHabits={bookkeepingHabits}
+      />
+
+      <Modal
+        title={t("bookkeeping_habits.title")}
+        open={habitsOpen}
+        width={600}
+        footer={null}
+        destroyOnHidden
+        onCancel={() => setHabitsOpen(false)}
+      >
+        <BookkeepingHabitsForm
+          initialValue={bookkeepingHabits}
+          onCancel={() => setHabitsOpen(false)}
+          onSaved={(habits) => {
+            setBookkeepingHabits(habits);
+            setHabitsOpen(false);
+          }}
+        />
+      </Modal>
 
       <Modal
         title={t("settings.title")}

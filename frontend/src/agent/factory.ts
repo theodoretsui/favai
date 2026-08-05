@@ -43,9 +43,10 @@ export function createImportAgent(
  * Create a pi agent for the analysis chat.
  *
  * @param config - LLM provider configuration.
+ * @param bookkeepingHabits - Ledger-wide user preferences.
  * @returns      - An ``Agent`` ready to ``prompt()``.
  */
-export function createChatAgent(config: Config) {
+export function createChatAgent(config: Config, bookkeepingHabits = "") {
   const { models, model } = buildModels(config);
   const streamFn: StreamFn = (m, ctx, opts) => models.streamSimple(m, ctx, opts);
 
@@ -53,7 +54,7 @@ export function createChatAgent(config: Config) {
     initialState: {
       systemPrompt: withBookkeepingHabits(
         CHAT_SYSTEM_PROMPT,
-        config.bookkeeping_habits,
+        bookkeepingHabits,
       ),
       model,
       tools: [makeBqlTool()],
@@ -71,11 +72,13 @@ export function createChatAgent(config: Config) {
  * message based on whether files were attached.
  *
  * @param config     - LLM provider configuration.
+ * @param bookkeepingHabits - Ledger-wide user preferences.
  * @param onProposal - Called when the agent submits ``propose_transactions``.
  * @returns          - An ``Agent`` ready to ``prompt()``.
  */
 export function createUnifiedAgent(
   config: Config,
+  bookkeepingHabits: string,
   onProposal: (txns: Transaction[]) => void,
 ) {
   const { models, model } = buildModels(config);
@@ -85,7 +88,7 @@ export function createUnifiedAgent(
     initialState: {
       systemPrompt: withBookkeepingHabits(
         UNIFIED_SYSTEM_PROMPT,
-        config.bookkeeping_habits,
+        bookkeepingHabits,
       ),
       model,
       tools: [makeImportTool(onProposal), makeBqlTool(), makeTodayTool()],

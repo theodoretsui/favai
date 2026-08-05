@@ -14,7 +14,6 @@ from favai.config import (
     load_bookkeeping_habits,
     load_config,
     load_configs,
-    public_config,
     public_configs,
     save_bookkeeping_habits,
     save_config,
@@ -48,11 +47,7 @@ def test_bookkeeping_habits_are_ledger_wide_and_preserved(tmp_path):
     save_config(tmp_path, second)
 
     assert load_bookkeeping_habits(tmp_path) == "餐饮使用 Expenses:Food"
-    assert public_config(tmp_path)["bookkeeping_habits"] == "餐饮使用 Expenses:Food"
-    assert all(
-        item["bookkeeping_habits"] == "餐饮使用 Expenses:Food"
-        for item in public_configs(tmp_path)
-    )
+    assert all("bookkeeping_habits" not in item for item in public_configs(tmp_path))
 
 
 def test_legacy_array_config_has_empty_bookkeeping_habits(tmp_path):

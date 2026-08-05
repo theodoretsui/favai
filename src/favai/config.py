@@ -132,20 +132,7 @@ def load_config(data_dir: Path, provider: str | None = None) -> ProviderConfig:
 
 def public_configs(data_dir: Path) -> list[dict[str, Any]]:
     """Return all stored configs with literal keys masked."""
-    habits = load_bookkeeping_habits(data_dir)
-    configs = []
-    for config in load_configs(data_dir)[1]:
-        public = config.to_public_dict()
-        public["bookkeeping_habits"] = habits
-        configs.append(public)
-    return configs
-
-
-def public_config(data_dir: Path) -> dict[str, Any]:
-    """Return the active config plus ledger-wide preferences."""
-    public = load_config(data_dir).to_public_dict()
-    public["bookkeeping_habits"] = load_bookkeeping_habits(data_dir)
-    return public
+    return [config.to_public_dict() for config in load_configs(data_dir)[1]]
 
 
 def config_from_public_payload(

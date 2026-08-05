@@ -17,8 +17,8 @@ from favai.config import (
     config_path,
     data_dir_for,
     delete_config,
+    load_bookkeeping_habits,
     load_config,
-    public_config,
     public_configs,
     save_bookkeeping_habits,
     save_config,
@@ -138,9 +138,18 @@ class FavaAI(FavaExtensionBase):
                 current = ProviderConfig(provider=provider or "custom")
             config = config_from_public_payload(current, payload)
             save_config(self.data_dir, config)
-            if "bookkeeping_habits" in payload:
-                save_bookkeeping_habits(self.data_dir, payload["bookkeeping_habits"])
-        return public_config(self.data_dir)
+        return load_config(self.data_dir).to_public_dict()
+
+    @extension_endpoint("bookkeeping_habits", ["GET", "POST"])
+    @api_response
+    def api_bookkeeping_habits(self) -> dict[str, str]:
+        """Read or update ledger-wide bookkeeping habits."""
+        if request.method == "POST":
+            payload = request.get_json(force=True)
+            save_bookkeeping_habits(
+                self.data_dir, payload.get("bookkeeping_habits", "")
+            )
+        return {"bookkeeping_habits": load_bookkeeping_habits(self.data_dir)}
 
     @extension_endpoint("provider_configs")
     @api_response

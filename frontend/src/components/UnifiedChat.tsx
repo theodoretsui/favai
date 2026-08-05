@@ -60,9 +60,11 @@ function parseModelChoice(value: string): ModelChoice {
 export function UnifiedChat({
   config,
   status,
+  bookkeepingHabits,
 }: {
   config: Config | null;
   status: Status | null;
+  bookkeepingHabits: string;
 }) {
   const { message, modal } = AntApp.useApp();
   // Re-render trigger: bumped on every agent event so the derived message list
@@ -169,6 +171,7 @@ export function UnifiedChat({
     if (!effectiveModel || !effectiveApi) return;
     const agent = createUnifiedAgent(
       { ...effectiveConfig, api: effectiveApi, model: effectiveModel },
+      bookkeepingHabits,
       (txns) => {
         applyProposal(txns);
       },
@@ -190,6 +193,7 @@ export function UnifiedChat({
     effectiveConfig,
     effectiveApi,
     effectiveModel,
+    bookkeepingHabits,
     agentEpoch,
     bump,
   ]);
@@ -430,7 +434,7 @@ export function UnifiedChat({
           );
           agent.state.systemPrompt = `${withBookkeepingHabits(
             UNIFIED_SYSTEM_PROMPT,
-            activeConfig.bookkeeping_habits,
+            bookkeepingHabits,
           )}\n\n${importContext}`;
           ingestTexts = ingestResult.texts;
 
@@ -450,7 +454,7 @@ export function UnifiedChat({
         // Chat mode: keep the base system prompt, send user message directly.
         agent.state.systemPrompt = withBookkeepingHabits(
           UNIFIED_SYSTEM_PROMPT,
-          activeConfig.bookkeeping_habits,
+          bookkeepingHabits,
         );
       }
 
