@@ -74,12 +74,14 @@ const COMPONENTS: Partial<Components> = {
   table: withClass("table", "w-full border-collapse") as Components["table"],
   th: withClass("th", "border px-2 py-1 text-left font-semibold") as Components["th"],
   td: withClass("td", "border px-2 py-1 text-left") as Components["td"],
-  p: withClass("p", "whitespace-pre-wrap") as Components["p"],
+  p: ({ node: _node, ...props }) => (
+    <p className="whitespace-pre-wrap" style={{ margin: 0 }} {...props} />
+  ),
 };
 
 export function MarkdownRenderer({ children }: { children: string }) {
   return (
-    <div className="favai-markdown space-y-3 break-words">
+    <div className="favai-markdown flex flex-col gap-3 break-words">
       <Markdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
         {children}
       </Markdown>
