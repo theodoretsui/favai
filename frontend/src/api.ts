@@ -27,6 +27,10 @@ export interface Config {
   max_tokens: number;
 }
 
+export interface BookkeepingHabits {
+  bookkeeping_habits: string;
+}
+
 export interface Posting {
   account: string;
   amount?: string;
@@ -125,6 +129,12 @@ export const api = {
   status: () => request<Status>("status"),
   getConfig: () => request<Config>("config"),
   saveConfig: (config: Config) => postJson<Config>("config", config),
+  getBookkeepingHabits: () =>
+    request<BookkeepingHabits>("bookkeeping_habits"),
+  saveBookkeepingHabits: (bookkeeping_habits: string) =>
+    postJson<BookkeepingHabits>("bookkeeping_habits", {
+      bookkeeping_habits,
+    }),
   listProviderConfigs: () => request<Config[]>("provider_configs"),
   deleteProviderConfig: (provider: string) =>
     postJson<{ deleted: boolean }>("provider_config_delete", { provider }),

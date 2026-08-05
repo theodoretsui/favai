@@ -25,7 +25,11 @@ import {
 } from "@/api";
 import { t } from "@/i18n";
 import { getLedgerData } from "@/agent/favaApi";
-import { buildImportPrompt, UNIFIED_SYSTEM_PROMPT } from "@/agent/prompts";
+import {
+  buildImportPrompt,
+  UNIFIED_SYSTEM_PROMPT,
+  withBookkeepingHabits,
+} from "@/agent/prompts";
 import { createUnifiedAgent } from "@/agent/factory";
 import {
   ingestContentBlock,
@@ -56,9 +60,11 @@ function parseModelChoice(value: string): ModelChoice {
 export function UnifiedChat({
   config,
   status,
+  bookkeepingHabits,
 }: {
   config: Config | null;
   status: Status | null;
+  bookkeepingHabits: string;
 }) {
   const { message, modal } = AntApp.useApp();
   // Re-render trigger: bumped on every agent event so the derived message list
@@ -165,6 +171,7 @@ export function UnifiedChat({
     if (!effectiveModel || !effectiveApi) return;
     const agent = createUnifiedAgent(
       { ...effectiveConfig, api: effectiveApi, model: effectiveModel },
+      bookkeepingHabits,
       (txns) => {
         applyProposal(txns);
       },
@@ -186,6 +193,7 @@ export function UnifiedChat({
     effectiveConfig,
     effectiveApi,
     effectiveModel,
+    bookkeepingHabits,
     agentEpoch,
     bump,
   ]);
@@ -424,7 +432,10 @@ export function UnifiedChat({
             currentDate,
             ingestResult.warnings,
           );
-          agent.state.systemPrompt = `${UNIFIED_SYSTEM_PROMPT}\n\n${importContext}`;
+          agent.state.systemPrompt = `${withBookkeepingHabits(
+            UNIFIED_SYSTEM_PROMPT,
+            bookkeepingHabits,
+          )}\n\n${importContext}`;
           ingestTexts = ingestResult.texts;
 
           images = ingestResult.images;
@@ -441,7 +452,10 @@ export function UnifiedChat({
         }
       } else {
         // Chat mode: keep the base system prompt, send user message directly.
-        agent.state.systemPrompt = UNIFIED_SYSTEM_PROMPT;
+        agent.state.systemPrompt = withBookkeepingHabits(
+          UNIFIED_SYSTEM_PROMPT,
+          bookkeepingHabits,
+        );
       }
 
       if (ingestTexts.length > 0) {

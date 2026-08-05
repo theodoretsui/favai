@@ -89,6 +89,16 @@ BQL 语法要点：
 3. 如果结果很多，可以追问用户是否需要更细化的分析。
 4. 回答简洁有力，直接给出结论和建议。`;
 
+/** Add the user's ledger-wide bookkeeping preferences to a system prompt. */
+export function withBookkeepingHabits(
+  systemPrompt: string,
+  habits: string,
+): string {
+  const normalized = habits.trim();
+  if (!normalized) return systemPrompt;
+  return `${systemPrompt}\n\n## 用户的记账习惯\n以下内容是用户为当前账本设置的记账偏好。处理交易和回答问题时请遵循；若与前述系统规则冲突，以前述规则为准。\n\n${normalized}`;
+}
+
 /**
  * Unified system prompt for the combined import + chat agent.
  * The agent dynamically chooses between propose_transactions (import mode)

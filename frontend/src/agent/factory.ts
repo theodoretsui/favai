@@ -8,7 +8,11 @@ import type { Config, Transaction } from "@/api";
 import { buildModels } from "@/agent/provider";
 import { makeImportTool } from "@/agent/tools/importTool";
 import { makeBqlTool } from "@/agent/tools/bqlTool";
-import { CHAT_SYSTEM_PROMPT, UNIFIED_SYSTEM_PROMPT } from "@/agent/prompts";
+import {
+  CHAT_SYSTEM_PROMPT,
+  UNIFIED_SYSTEM_PROMPT,
+  withBookkeepingHabits,
+} from "@/agent/prompts";
 import { makeTodayTool } from "@/agent/tools/dateTool";
 
 /**
@@ -39,15 +43,19 @@ export function createImportAgent(
  * Create a pi agent for the analysis chat.
  *
  * @param config - LLM provider configuration.
+ * @param bookkeepingHabits - Ledger-wide user preferences.
  * @returns      - An ``Agent`` ready to ``prompt()``.
  */
-export function createChatAgent(config: Config) {
+export function createChatAgent(config: Config, bookkeepingHabits = "") {
   const { models, model } = buildModels(config);
   const streamFn: StreamFn = (m, ctx, opts) => models.streamSimple(m, ctx, opts);
 
   return new Agent({
     initialState: {
-      systemPrompt: CHAT_SYSTEM_PROMPT,
+      systemPrompt: withBookkeepingHabits(
+        CHAT_SYSTEM_PROMPT,
+        bookkeepingHabits,
+      ),
       model,
       tools: [makeBqlTool()],
     },
@@ -64,11 +72,13 @@ export function createChatAgent(config: Config) {
  * message based on whether files were attached.
  *
  * @param config     - LLM provider configuration.
+ * @param bookkeepingHabits - Ledger-wide user preferences.
  * @param onProposal - Called when the agent submits ``propose_transactions``.
  * @returns          - An ``Agent`` ready to ``prompt()``.
  */
 export function createUnifiedAgent(
   config: Config,
+  bookkeepingHabits: string,
   onProposal: (txns: Transaction[]) => void,
 ) {
   const { models, model } = buildModels(config);
@@ -76,7 +86,10 @@ export function createUnifiedAgent(
 
   return new Agent({
     initialState: {
-      systemPrompt: UNIFIED_SYSTEM_PROMPT,
+      systemPrompt: withBookkeepingHabits(
+        UNIFIED_SYSTEM_PROMPT,
+        bookkeepingHabits,
+      ),
       model,
       tools: [makeImportTool(onProposal), makeBqlTool(), makeTodayTool()],
     },
