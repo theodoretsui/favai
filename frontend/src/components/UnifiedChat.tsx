@@ -254,8 +254,16 @@ export function UnifiedChat({
   function scheduleEditSave() {
     if (editSaveTimerRef.current) clearTimeout(editSaveTimerRef.current);
     editSaveTimerRef.current = setTimeout(() => {
+      editSaveTimerRef.current = null;
       void persistSession();
     }, 750);
+  }
+
+  async function flushScheduledEditSave() {
+    if (!editSaveTimerRef.current) return;
+    clearTimeout(editSaveTimerRef.current);
+    editSaveTimerRef.current = null;
+    await persistSession();
   }
 
   function applyProposal(proposal: Transaction[] | null) {
@@ -315,6 +323,7 @@ export function UnifiedChat({
     if (isProcessing || agentRef.current?.state.isStreaming) return;
     try {
       if (editSaveTimerRef.current) clearTimeout(editSaveTimerRef.current);
+      editSaveTimerRef.current = null;
       await persistSession();
       const session = await api.getSession(sessionId);
       setSession(session);
@@ -334,6 +343,7 @@ export function UnifiedChat({
   async function newSession() {
     if (isProcessing || agentRef.current?.state.isStreaming) return;
     if (editSaveTimerRef.current) clearTimeout(editSaveTimerRef.current);
+    editSaveTimerRef.current = null;
     await persistSession();
     resetSession();
   }
@@ -475,6 +485,7 @@ export function UnifiedChat({
   async function confirm() {
     if (!transactions) return;
     try {
+      await flushScheduledEditSave();
       const result = await api.importConfirm(
         transactions,
         currentSession?.id,
@@ -484,7 +495,9 @@ export function UnifiedChat({
       replaceDirty(false);
       replacePendingProposal(null);
       if (currentSession) {
-        setSession(await api.getSession(currentSession.id));
+        const session = await api.getSession(currentSession.id);
+        setSession(session);
+        replaceTransactions(session.proposal);
       }
       await refreshSessions();
     } catch (err) {
@@ -606,16 +619,8 @@ export function UnifiedChat({
           />
         </div>
 
-      {/* Confirmed imports are immutable history, not an active proposal. */}
-      {transactions && currentSession?.confirmed_at && (
-        <ImportedTransactions
-          transactions={transactions}
-          confirmedCount={currentSession.confirmed_count}
-        />
-      )}
-
       {/* Editable proposal table */}
-      {transactions && !currentSession?.confirmed_at && (
+      {transactions && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-medium">{t("proposal.title")}</h2>
@@ -704,6 +709,14 @@ export function UnifiedChat({
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Confirmed imports are immutable history below the active proposal. */}
+      {currentSession && currentSession.confirmed_transactions.length > 0 && (
+        <ImportedTransactions
+          transactions={currentSession.confirmed_transactions}
+          confirmedCount={currentSession.confirmed_count}
+        />
       )}
       </div>
     </div>

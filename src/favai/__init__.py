@@ -312,5 +312,5 @@ class FavaAI(FavaExtensionBase):
         write_entries(self.ledger, entries, write_path)
         session_id = payload.get("session_id")
         if session_id:
-            mark_confirmed(self.data_dir, session_id, count=len(entries))
+            mark_confirmed(self.data_dir, session_id, transactions=transactions)
         return {"inserted": len(entries), "write_path": write_path}

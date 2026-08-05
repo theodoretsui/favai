@@ -74,6 +74,7 @@ export interface Session extends Omit<SessionSummary, "has_proposal"> {
   messages: unknown[];
   proposal: Transaction[] | null;
   pending_proposal: Transaction[] | null;
+  confirmed_transactions: Transaction[];
 }
 
 export interface SessionListResult {

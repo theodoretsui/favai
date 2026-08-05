@@ -55,7 +55,7 @@ const zhCN = {
   "history.delete.confirm": "确定删除这段对话吗？",
   "history.conflict": "该对话已在其他窗口更新，请重新打开。",
 
-  "proposal.title": "提案预览",
+  "proposal.title": "审核写入",
   "proposal.empty": "暂无提案，等待 LLM 提取结果。",
   "proposal.new.available": "LLM 给出了新提案",
   "proposal.new.apply": "覆盖当前修改",
@@ -83,7 +83,7 @@ const zhCN = {
   "discard.submit": "放弃",
   "discard.done": "已放弃本次导入",
 
-  "imported.title": "已导入记录",
+  "imported.title": "已写入",
   "imported.count": "{count} 条",
 
   "settings.title": "设置",
@@ -186,7 +186,7 @@ const en: Record<I18nKey, string> = {
   "history.delete.confirm": "Delete this conversation?",
   "history.conflict": "This conversation changed in another tab. Reopen it to continue.",
 
-  "proposal.title": "Proposal preview",
+  "proposal.title": "Review and write",
   "proposal.empty": "No proposal yet — waiting for the LLM to extract transactions.",
   "proposal.new.available": "The LLM produced a new proposal",
   "proposal.new.apply": "Overwrite my edits",
@@ -214,7 +214,7 @@ const en: Record<I18nKey, string> = {
   "discard.submit": "Discard",
   "discard.done": "Import discarded",
 
-  "imported.title": "Imported records",
+  "imported.title": "Written",
   "imported.count": "{count} entries",
 
   "settings.title": "Settings",
