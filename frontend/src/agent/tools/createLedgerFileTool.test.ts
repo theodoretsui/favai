@@ -32,6 +32,17 @@ async function flush(): Promise<void> {
   await vi.advanceTimersByTimeAsync(0);
 }
 
+async function waitForApproval(
+  manager: ApprovalManager,
+): Promise<{ id: string }> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (manager.current) return manager.current;
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+  }
+  throw new Error("approval request never presented");
+}
+
 async function approvedManager(): Promise<ApprovalManager> {
   vi.useFakeTimers();
   const manager = new ApprovalManager({
@@ -49,8 +60,8 @@ async function approvedManager(): Promise<ApprovalManager> {
     toolCall: { name: "create_ledger_file" } as never,
     args: PARAMS,
   } as never);
-  await flush();
-  manager.approve(manager.current!.id);
+  const request = await waitForApproval(manager);
+  manager.approve(request.id);
   await pending;
   return manager;
 }
