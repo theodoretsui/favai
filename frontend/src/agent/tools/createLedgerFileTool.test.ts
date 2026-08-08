@@ -25,13 +25,6 @@ const PARAMS = {
   include_in_main: true,
 };
 
-async function flush(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await vi.advanceTimersByTimeAsync(0);
-  await vi.advanceTimersByTimeAsync(0);
-}
-
 async function waitForApproval(
   manager: ApprovalManager,
 ): Promise<{ id: string }> {
