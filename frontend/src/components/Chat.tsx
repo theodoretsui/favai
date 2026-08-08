@@ -16,8 +16,10 @@ import { Button, Collapse, Flex, Spin, Tooltip, Typography, Upload } from "antd"
 import type { UploadFile } from "antd";
 
 import type { ChatMessage, ToolInvocation } from "@/agent/chatTypes";
+import type { ApprovalRequest } from "@/agent/approval";
 import { t } from "@/i18n";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
+import { ApprovalPrompt } from "@/components/ApprovalPrompt";
 
 const ACCEPTED_FILES = ".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.pdf";
 
@@ -34,6 +36,10 @@ interface ChatProps {
   setFiles?: React.Dispatch<React.SetStateAction<File[] | null>>;
   allowAttachments?: boolean;
   placeholder?: string;
+  /** Pending human-in-the-loop approval, embedded in the composer header. */
+  approval?: ApprovalRequest | null;
+  onApprove?: () => void;
+  onDeny?: () => void;
 }
 
 function ToolSteps({ invocations }: { invocations: ToolInvocation[] }) {
@@ -154,6 +160,9 @@ export function Chat({
   setFiles,
   allowAttachments = false,
   placeholder,
+  approval = null,
+  onApprove,
+  onDeny,
 }: ChatProps) {
   const senderRef = useRef<SenderRef>(null);
   const attachmentsRef = useRef<AttachmentsRef>(null);
@@ -336,37 +345,48 @@ export function Chat({
             return false;
           }
         }}
-        header={attachmentItems.length > 0 ? (
-          <Attachments
-            ref={attachmentsRef}
-            items={attachmentItems}
-            overflow="scrollX"
-            beforeUpload={(file) => {
-              addFiles([file]);
-              window.requestAnimationFrame(focusSender);
-              return Upload.LIST_IGNORE;
-            }}
-            onRemove={(removed) => {
-              const index = attachmentItems.findIndex((item) => item.uid === removed.uid);
-              setFiles?.((current) => {
-                const next = (current ?? []).filter((_, itemIndex) => itemIndex !== index);
-                return next.length > 0 ? next : null;
-              });
-              return false;
-            }}
-          />
-        ) : (
-          <Attachments
-            ref={attachmentsRef}
-            className="hidden"
-            items={[]}
-            beforeUpload={(file) => {
-              addFiles([file]);
-              window.requestAnimationFrame(focusSender);
-              return Upload.LIST_IGNORE;
-            }}
-          />
-        )}
+        header={
+          <div className="flex flex-col gap-2">
+            {approval && onApprove && onDeny && (
+              <ApprovalPrompt
+                request={approval}
+                onApprove={onApprove}
+                onDeny={onDeny}
+              />
+            )}
+            {attachmentItems.length > 0 ? (
+              <Attachments
+                ref={attachmentsRef}
+                items={attachmentItems}
+                overflow="scrollX"
+                beforeUpload={(file) => {
+                  addFiles([file]);
+                  window.requestAnimationFrame(focusSender);
+                  return Upload.LIST_IGNORE;
+                }}
+                onRemove={(removed) => {
+                  const index = attachmentItems.findIndex((item) => item.uid === removed.uid);
+                  setFiles?.((current) => {
+                    const next = (current ?? []).filter((_, itemIndex) => itemIndex !== index);
+                    return next.length > 0 ? next : null;
+                  });
+                  return false;
+                }}
+              />
+            ) : (
+              <Attachments
+                ref={attachmentsRef}
+                className="hidden"
+                items={[]}
+                beforeUpload={(file) => {
+                  addFiles([file]);
+                  window.requestAnimationFrame(focusSender);
+                  return Upload.LIST_IGNORE;
+                }}
+              />
+            )}
+          </div>
+        }
         suffix={(_originalNode, { components }) => {
           const { LoadingButton, SendButton } = components;
           const actionStyle = { width: 32, height: 32, borderRadius: 3 };

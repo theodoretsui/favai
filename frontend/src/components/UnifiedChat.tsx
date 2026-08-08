@@ -36,7 +36,6 @@ import {
   ingestContentBlock,
   toChatMessages,
 } from "@/agent/toChatMessages";
-import { ApprovalPrompt } from "@/components/ApprovalPrompt";
 import { Chat } from "@/components/Chat";
 import { SessionSidebar } from "@/components/SessionSidebar";
 import { ImportedTransactions } from "@/components/ImportedTransactions";
@@ -559,13 +558,6 @@ export function UnifiedChat({
         onLoadMore={() => void loadMoreSessions()}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-4">
-        {pendingApproval && (
-          <ApprovalPrompt
-            request={pendingApproval}
-            onApprove={() => approvalManager.approve(pendingApproval.id)}
-            onDeny={() => approvalManager.deny(pendingApproval.id)}
-          />
-        )}
         {!isConfigured && (
           <Alert
             type="warning"
@@ -627,6 +619,17 @@ export function UnifiedChat({
               isConfigured
                 ? t("chat.input.placeholder")
                 : t("chat.not.configured")
+            }
+            approval={pendingApproval}
+            onApprove={
+              pendingApproval
+                ? () => approvalManager.approve(pendingApproval.id)
+                : undefined
+            }
+            onDeny={
+              pendingApproval
+                ? () => approvalManager.deny(pendingApproval.id)
+                : undefined
             }
           />
         </Card>
