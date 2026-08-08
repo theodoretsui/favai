@@ -43,10 +43,13 @@ export type QueryResult = QueryResultTable | QueryResultString;
 /**
  * Run a BQL query against the fava API.
  */
-export async function runQuery(bql: string): Promise<QueryResult> {
+export async function runQuery(
+  bql: string,
+  signal?: AbortSignal,
+): Promise<QueryResult> {
   const { baseUrl } = getLedgerData();
   const url = `${baseUrl}api/query?query_string=${encodeURIComponent(bql)}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   const body = await res.json();
   if (!res.ok || body.error) {
     throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -54,33 +57,92 @@ export async function runQuery(bql: string): Promise<QueryResult> {
   return body.data as QueryResult;
 }
 
-/**
- * Flatten a ``QueryResultTable`` into a plain string for the LLM.
- *
- * Amount cells (``{number, currency}``) are converted to ``"123.45 CNY"``.
- * Rows exceeding ``maxRows`` are truncated with a note.
- */
-export function flattenTable(result: QueryResult, maxRows = 200): string {
+/** Metadata retained with a formatted BQL tool result. */
+export interface QueryResultDetails {
+  query: string;
+  resultType: QueryResult["t"];
+  columns: { name: string; dtype: string }[];
+  rows: unknown[][];
+  totalRows: number;
+  returnedRows: number;
+  truncated: boolean;
+  maxRows: number;
+  textLength: number;
+}
+
+export interface FormattedQueryResult {
+  text: string;
+  details: QueryResultDetails;
+}
+
+/** Format a query response for both model context and structured tool details. */
+export function formatQueryResult(
+  query: string,
+  result: QueryResult,
+  maxRows = 200,
+): FormattedQueryResult {
+  const rowLimit = Math.max(0, Math.floor(maxRows));
+
   if (result.t === "string") {
-    return result.contents;
+    const contents = result.contents || "（查询没有返回文本）";
+    return {
+      text: `BQL 查询成功。\n查询：${query}\n\n${contents}`,
+      details: {
+        query,
+        resultType: "string",
+        columns: [],
+        rows: [],
+        totalRows: 0,
+        returnedRows: 0,
+        truncated: false,
+        maxRows: rowLimit,
+        textLength: result.contents.length,
+      },
+    };
   }
 
   const table = result;
+  const rows = table.rows.slice(0, rowLimit);
+  const truncated = table.rows.length > rows.length;
   const lines: string[] = [];
   const colNames = table.types.map((t) => t.name);
+  lines.push("BQL 查询成功。");
+  lines.push(`查询：${query}`);
+  lines.push(
+    `返回：${rows.length}/${table.rows.length} 行${truncated ? "（已截断）" : ""}`,
+  );
+  lines.push("");
   lines.push(colNames.join(" | "));
 
-  const data = table.rows.slice(0, maxRows);
-  for (const row of data) {
-    const cells = row.map((cell, i) => formatCell(cell, table.types[i]?.dtype ?? "object"));
+  for (const row of rows) {
+    const cells = row.map((cell, i) =>
+      formatCell(cell, table.types[i]?.dtype ?? "object"),
+    );
     lines.push(cells.join(" | "));
   }
 
-  if (table.rows.length > maxRows) {
-    lines.push(`(已截断，共 ${table.rows.length} 行)`);
+  if (table.rows.length === 0) {
+    lines.push("（0 行）");
+  } else if (truncated) {
+    lines.push(
+      `（结果已截断，共 ${table.rows.length} 行；请增加过滤条件或 LIMIT 后重试。）`,
+    );
   }
 
-  return lines.join("\n");
+  return {
+    text: lines.join("\n"),
+    details: {
+      query,
+      resultType: "table",
+      columns: table.types,
+      rows,
+      totalRows: table.rows.length,
+      returnedRows: rows.length,
+      truncated,
+      maxRows: rowLimit,
+      textLength: 0,
+    },
+  };
 }
 
 function formatCell(cell: unknown, _dtype: string): string {
@@ -94,7 +156,7 @@ function formatCell(cell: unknown, _dtype: string): string {
     return JSON.stringify(obj);
   }
   if (Array.isArray(cell)) {
-    return cell.join(", ");
+    return cell.map((item) => formatCell(item, "object")).join(", ");
   }
-  return String(cell);
+  return String(cell).replaceAll("\n", "\\n").replaceAll("|", "\\|");
 }

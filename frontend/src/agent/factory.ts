@@ -8,6 +8,7 @@ import type { Config, Transaction } from "@/api";
 import { buildModels } from "@/agent/provider";
 import { makeImportTool } from "@/agent/tools/importTool";
 import { makeBqlTool } from "@/agent/tools/bqlTool";
+import { makeBqlHelpTool } from "@/agent/tools/bqlHelpTool";
 import {
   CHAT_SYSTEM_PROMPT,
   UNIFIED_SYSTEM_PROMPT,
@@ -57,7 +58,7 @@ export function createChatAgent(config: Config, bookkeepingHabits = "") {
         bookkeepingHabits,
       ),
       model,
-      tools: [makeBqlTool()],
+      tools: [makeBqlHelpTool(), makeBqlTool()],
     },
     streamFn,
   });
@@ -91,7 +92,12 @@ export function createUnifiedAgent(
         bookkeepingHabits,
       ),
       model,
-      tools: [makeImportTool(onProposal), makeBqlTool(), makeTodayTool()],
+      tools: [
+        makeImportTool(onProposal),
+        makeBqlHelpTool(),
+        makeBqlTool(),
+        makeTodayTool(),
+      ],
     },
     streamFn,
   });
