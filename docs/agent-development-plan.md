@@ -10,9 +10,9 @@ remain in scope for human-in-the-loop execution.
 | Workstream | Status | Summary |
 | --- | --- | --- |
 | BQL guidance | Implemented; pending review | Added a progressively disclosed, skill-like BQL reference, corrected prompts, structured results, and runtime examples. |
-| Ledger entry proposals | Agreed | Use separate typed tools for transactions and selected dated directives, joined by one reviewed change set. |
-| Ledger file creation | Agreed | Add a narrowly scoped capability to create a Beancount file and include it from the main ledger. |
-| Human in the loop | Agreed | Add a reusable tool authorization layer before enabling ledger-structure writes. |
+| Ledger entry proposals | Implemented; pending review | Separate typed tools for transactions and selected dated directives, joined by one reviewed change set. |
+| Ledger file creation | Implemented; pending review | A narrowly scoped, HITL-gated capability to create a Beancount file and include it from the main ledger. |
+| Human in the loop | Implemented; pending review | A reusable tool authorization layer gating ledger-structure writes. |
 
 The implementation should be delivered as focused pull requests. This plan
 does not authorize merging a pull request or publishing a package release.
@@ -557,3 +557,23 @@ may evolve through follow-up planning PRs as decisions are made.
   topic-based BQL reference, read-only query boundary, structured/truncated
   result metadata, actionable failures, prompt corrections, and frontend plus
   Fava-runtime tests; pending review and pull-request publication.
+- 2026-08-08: Implemented Workstream 4 (HITL foundation) on
+  `codex/hitl-foundation`: tool risk metadata with fail-closed defaults, a
+  `beforeToolCall` approval gate with single-pending-request serialization,
+  and a backend single-use capability store (operation/ledger/session bound)
+  with a mint endpoint and `require_capability` consumption helper.
+- 2026-08-08: Implemented Workstream 2 (PR 4 and 5) on
+  `codex/proposal-change-set`: shared `LedgerChangeSet` with monotonic
+  revisions and complete-batch replacement, typed postings (units, per-unit/
+  total/compound costs, prices, lot dates, posting flags, bounded metadata),
+  canonical backend rendering with parse-back verification and ledger-context
+  validation, the six-directive allowlist, and revision/checksum-bound
+  confirmation.
+- 2026-08-08: Implemented Workstream 3 (PR 3) on
+  `codex/ledger-file-creation`: a gated create-and-include capability wired
+  through the HITL layer, with backend-only path/payload/checksum enforcement,
+  orphan recovery, and idempotent completion.
+- 2026-08-08: Merged the HITL, proposal change-set, and ledger-file-creation
+  branches into `codex/agent-related-dev` with all Python and frontend checks
+  green; each implementation still needs independent review and pull-request
+  publication from its own branch.
