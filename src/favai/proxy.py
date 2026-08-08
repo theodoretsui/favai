@@ -8,7 +8,6 @@ the request to the user-configured provider, injecting the real API key.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from typing import TYPE_CHECKING
@@ -92,25 +91,6 @@ def _build_upstream_headers(
     return result
 
 
-def _build_upstream_body(body: bytes, config: ProviderConfig) -> bytes:
-    """Remove favai's provider prefix from the SDK-facing model id."""
-    try:
-        payload = json.loads(body)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return body
-
-    if not isinstance(payload, dict):
-        return body
-
-    model = payload.get("model")
-    provider_prefix = f"{config.provider}/"
-    if not isinstance(model, str) or not model.startswith(provider_prefix):
-        return body
-
-    payload["model"] = model.removeprefix(provider_prefix)
-    return json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
-
-
 def forward_llm(
     config: ProviderConfig,
     upstream_path: str,
@@ -143,14 +123,11 @@ def forward_llm(
 
     url = config.base_url.rstrip("/") + upstream_path
     upstream_headers = _build_upstream_headers(upstream_path, headers, config)
-    upstream_body = _build_upstream_body(body, config)
     content_type_from_req = upstream_headers.get("content-type", "application/json")
 
     client = httpx.Client(timeout=httpx.Timeout(300.0, connect=10.0))
     try:
-        req = client.build_request(
-            "POST", url, content=upstream_body, headers=upstream_headers
-        )
+        req = client.build_request("POST", url, content=body, headers=upstream_headers)
         upstream_resp = client.send(req, stream=True)
     except httpx.HTTPError as exc:
         client.close()
