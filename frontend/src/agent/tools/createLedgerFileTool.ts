@@ -30,12 +30,16 @@ const CreateLedgerFileParams = Type.Object({
 /**
  * Create the gated ``create_ledger_file`` tool.
  *
- * @param manager - Approval manager holding the single-use capability minted
- *                  after the user approved this exact operation.
+ * @param manager      - Approval manager holding the single-use capability
+ *                       minted after the user approved this exact operation.
+ * @param getSessionId - Current conversation session id; the capability is
+ *                       bound to the session at mint time and the write
+ *                       endpoint verifies it.
  */
-export function makeCreateLedgerFileTool(manager?: ApprovalManager): AgentTool<
-  typeof CreateLedgerFileParams
-> {
+export function makeCreateLedgerFileTool(
+  manager?: ApprovalManager,
+  getSessionId: () => string | undefined = () => undefined,
+): AgentTool<typeof CreateLedgerFileParams> {
   return {
     name: "create_ledger_file",
     label: "创建账本文件",
@@ -59,6 +63,7 @@ export function makeCreateLedgerFileTool(manager?: ApprovalManager): AgentTool<
         result = await api.createLedgerFile({
           capability: grant.capability,
           operation: params,
+          sessionId: getSessionId(),
         });
       } catch (err) {
         throw new Error(err instanceof Error ? err.message : String(err));

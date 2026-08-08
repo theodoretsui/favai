@@ -148,7 +148,7 @@ export function createUnifiedAgent(
     [
       makeProposeTransactionsTool(onProposal, getSessionId),
       makeProposeDirectivesTool(onProposal, getSessionId),
-      makeCreateLedgerFileTool(approval?.manager),
+      makeCreateLedgerFileTool(approval?.manager, getSessionId),
       makeBqlHelpTool(),
       makeBqlTool(),
       makeTodayTool(),

@@ -66,20 +66,20 @@ describe("create_ledger_file", () => {
   });
 
   it("cannot execute without an approval manager", async () => {
-    const tool = makeCreateLedgerFileTool();
+    const tool = makeCreateLedgerFileTool(undefined, () => "s1");
     await expect(tool.execute("c-1", PARAMS)).rejects.toThrow(/not approved/);
   });
 
   it("throws when the exact reviewed arguments were not approved", async () => {
     const manager = new ApprovalManager();
-    const tool = makeCreateLedgerFileTool(manager);
+    const tool = makeCreateLedgerFileTool(manager, () => "s1");
     await expect(
       tool.execute("c-2", { ...PARAMS, path: "other.beancount" }),
     ).rejects.toThrow(/not approved/);
     expect(api.createLedgerFile).not.toHaveBeenCalled();
   });
 
-  it("submits the reviewed operation with its single-use capability", async () => {
+  it("submits the reviewed operation with its single-use capability and session", async () => {
     const manager = await approvedManager();
     vi.mocked(api.createLedgerFile).mockResolvedValue({
       created_path: "2026/2026-08.beancount",
@@ -87,12 +87,13 @@ describe("create_ledger_file", () => {
       already_completed: false,
     });
 
-    const tool = makeCreateLedgerFileTool(manager);
+    const tool = makeCreateLedgerFileTool(manager, () => "s1");
     const result = await tool.execute("c-3", PARAMS);
 
     expect(api.createLedgerFile).toHaveBeenCalledWith({
       capability: "tok-1",
       operation: PARAMS,
+      sessionId: "s1",
     });
     const text = result.content[0]?.type === "text" ? result.content[0].text : "";
     expect(text).toContain("2026/2026-08.beancount");
@@ -103,7 +104,7 @@ describe("create_ledger_file", () => {
     vi.mocked(api.createLedgerFile).mockRejectedValue(
       new Error("目标文件已存在且内容不同，拒绝覆盖"),
     );
-    const tool = makeCreateLedgerFileTool(manager);
+    const tool = makeCreateLedgerFileTool(manager, () => "s1");
     await expect(tool.execute("c-4", PARAMS)).rejects.toThrow("拒绝覆盖");
   });
 });
