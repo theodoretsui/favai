@@ -16,6 +16,7 @@ test-e2e: build ## Run browser E2E tests (requires agent-browser)
 	bash e2e/test_pure_image_thumbnail.sh
 	bash e2e/test_tool_result_bubble.sh
 	bash e2e/test_proposal_warning.sh
+	bash e2e/test_approval_inline.sh
 
 lint: ## Ruff lint + format check
 	$(PYTHON) ruff check src tests e2e/openai_stub.py

@@ -38,6 +38,9 @@ class Handler(BaseHTTPRequestHandler):
         is_proposal_warning_test = any(
             "E2E_PROPOSAL_WARNING" in _message_text(message) for message in messages
         )
+        is_approval_inline_test = any(
+            "E2E_APPROVAL_INLINE" in _message_text(message) for message in messages
+        )
         tool_results = [
             message for message in messages if message.get("role") == "tool"
         ]
@@ -133,6 +136,40 @@ class Handler(BaseHTTPRequestHandler):
                 self._chunk({}, finish_reason="tool_calls")
             else:
                 self._chunk({"content": "待确认提案已提交。"})
+                self._chunk({}, finish_reason="stop")
+            self.wfile.write(b"data: [DONE]\n\n")
+            return
+
+        if is_approval_inline_test:
+            self._start_stream()
+            self._chunk({"role": "assistant", "content": ""})
+            if not tool_results:
+                arguments = json.dumps(
+                    {
+                        "path": "sub_test.beancount",
+                        "initial_content": "",
+                        "include_in_main": True,
+                    },
+                    ensure_ascii=False,
+                )
+                self._chunk(
+                    {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "e2e-approval-inline-call",
+                                "type": "function",
+                                "function": {
+                                    "name": "create_ledger_file",
+                                    "arguments": arguments,
+                                },
+                            }
+                        ]
+                    }
+                )
+                self._chunk({}, finish_reason="tool_calls")
+            else:
+                self._chunk({"content": "文件已创建。"})
                 self._chunk({}, finish_reason="stop")
             self.wfile.write(b"data: [DONE]\n\n")
             return
