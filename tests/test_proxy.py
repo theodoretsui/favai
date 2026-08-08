@@ -36,6 +36,19 @@ def test_qualified_model_is_unwrapped_for_upstream():
     assert result == b'{"model":"shared-model","messages":[]}'
 
 
+def test_non_default_qualified_model_is_unwrapped_for_upstream():
+    config = ProviderConfig(
+        provider="hzw",
+        model="default-model",
+        models=["default-model", "custom/gpt-5.6-sol"],
+    )
+    body = b'{"model":"hzw/custom/gpt-5.6-sol","messages":[]}'
+
+    result = _build_upstream_body(body, config)
+
+    assert result == b'{"model":"custom/gpt-5.6-sol","messages":[]}'
+
+
 def test_legacy_unqualified_model_body_is_unchanged():
     config = ProviderConfig(provider="openai", model="shared-model")
     body = b'{"model": "shared-model", "messages": []}'

@@ -93,7 +93,7 @@ def _build_upstream_headers(
 
 
 def _build_upstream_body(body: bytes, config: ProviderConfig) -> bytes:
-    """Replace favai's provider-qualified model id with the upstream model id."""
+    """Remove favai's provider prefix from the SDK-facing model id."""
     try:
         payload = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -102,11 +102,12 @@ def _build_upstream_body(body: bytes, config: ProviderConfig) -> bytes:
     if not isinstance(payload, dict):
         return body
 
-    qualified_model = f"{config.provider}/{config.model}"
-    if payload.get("model") != qualified_model:
+    model = payload.get("model")
+    provider_prefix = f"{config.provider}/"
+    if not isinstance(model, str) or not model.startswith(provider_prefix):
         return body
 
-    payload["model"] = config.model
+    payload["model"] = model.removeprefix(provider_prefix)
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
 
 
