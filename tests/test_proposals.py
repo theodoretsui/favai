@@ -491,6 +491,50 @@ def test_security_purchase_with_cost(ledger):
     assert cs.errors == []
 
 
+def test_context_validation_rebooks_existing_cost_before_interpolation(tmp_path):
+    """Already-booked Fava costs must not be passed back as parser CostSpecs."""
+    from beancount.core.number import MISSING
+    from beancount.core.position import Cost
+    from fava.core import FavaLedger
+
+    source = tmp_path / "cost.beancount"
+    source.write_text(
+        LEDGER_SOURCE
+        + """
+2026-01-02 * "buy"
+  Assets:Broker  10 GOOG {100.00 USD}
+  Assets:CN:Bank  -1000.00 USD
+"""
+    )
+    real_ledger = FavaLedger(str(source))
+
+    # Model a booked ledger entry whose units must be interpolated again. Before
+    # the fix, booking.book() treats its Cost as a CostSpec and crashes while
+    # reading the nonexistent ``number_per`` attribute.
+    existing = next(
+        entry
+        for entry in real_ledger.all_entries
+        if type(entry).__name__ == "Transaction"
+    )
+    cost_posting = existing.postings[0]
+    assert isinstance(cost_posting.cost, Cost)
+    incomplete = cost_posting._replace(
+        units=cost_posting.units._replace(number=MISSING)
+    )
+    replacement = existing._replace(postings=[incomplete, *existing.postings[1:]])
+    real_ledger.all_entries = [
+        replacement if entry is existing else entry for entry in real_ledger.all_entries
+    ]
+
+    cs = ChangeSetStore().update(
+        "s1",
+        "transactions",
+        {"transactions": [simple_txn()]},
+        real_ledger,
+    )
+    assert cs.errors == []
+
+
 def test_security_sale_with_fees_and_capital_gain(ledger):
     real_ledger, _, _ = ledger
     store = ChangeSetStore()

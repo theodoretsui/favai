@@ -78,10 +78,13 @@ def _valid_date(value: Any, what: str) -> str:
 def _valid_account(value: Any) -> str:
     account = str(value or "").strip()
     if not account:
-        msg = f"账户名无效：{value!r}"
+        msg = f"账户名不可为空：{value!r}"
         raise EntryError(msg)
-    if _CONTROL_RE.search(account) or _WHITESPACE_RE.search(account):
-        msg = f"账户名无效：{account!r}"
+    if _CONTROL_RE.search(account):
+        msg = f"账户名无效：{account!r} 包含不允许的控制字符"
+        raise EntryError(msg)
+    if _WHITESPACE_RE.search(account):
+        msg = f"账户名无效：{account!r} 包含空格"
         raise EntryError(msg)
     # Use the same Beancount parser that will consume the rendered source.
     # This lets CJK characters appear from the third component onward, just
@@ -90,7 +93,7 @@ def _valid_account(value: Any) -> str:
 
     _, errors, _ = parse_string(f"1900-01-01 open {account} CNY\n")
     if errors:
-        msg = f"账户名无效：{account!r}"
+        msg = f"账户名无效：{account!r} 无法通过beancount校验"
         raise EntryError(msg)
     return account
 
@@ -579,11 +582,39 @@ def _verify_roundtrip(
 def validate_in_context(ledger: Any, proposed_entries: list[Any]) -> list[str]:
     """Validate the combined ledger in context; return only proposed-entry errors."""
     from beancount.core import data
+    from beancount.core.position import Cost, CostSpec
     from beancount.ops import validation
     from beancount.ops.balance import check as balance_check
     from beancount.parser import booking
 
-    existing = list(ledger.all_entries)
+    # Fava exposes entries after Beancount booking, so their posting costs are
+    # ``Cost`` instances. ``booking.book`` expects parser output instead and
+    # accesses ``CostSpec.number_per`` when it needs to interpolate a posting.
+    # Recreate the equivalent parser representation before booking the combined
+    # ledger. This also makes context validation robust when an existing entry
+    # contains an amount that Beancount needs to interpolate again.
+    existing: list[Any] = []
+    for entry in ledger.all_entries:
+        if not isinstance(entry, data.Transaction):
+            existing.append(entry)
+            continue
+        postings = []
+        changed = False
+        for posting in entry.postings:
+            cost = posting.cost
+            if isinstance(cost, Cost):
+                cost = CostSpec(
+                    cost.number,
+                    None,
+                    cost.currency,
+                    cost.date,
+                    cost.label,
+                    False,
+                )
+                posting = posting._replace(cost=cost)
+                changed = True
+            postings.append(posting)
+        existing.append(entry._replace(postings=postings) if changed else entry)
     combined = existing + proposed_entries
     combined.sort(key=data.entry_sortkey)
     options_map = ledger.options
