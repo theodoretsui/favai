@@ -147,6 +147,15 @@ const zhCN = {
   "import.validation.tagInvalid": "第 {index} 笔交易的标签格式无效：{tag}",
   "import.validation.multipleUnspecified": "第 {index} 笔交易有多条分录缺少金额",
   "import.validation.unbalanced": "第 {index} 笔交易金额不平衡（{currency} 差额 {difference}）",
+
+  "approval.title": "需要授权",
+  "approval.operation": "工具 {tool} 请求执行一个写入操作",
+  "approval.args": "操作参数（参数一旦更改，授权即失效）",
+  "approval.expires": "{seconds} 秒后自动拒绝",
+  "approval.approve": "批准执行",
+  "approval.deny": "拒绝",
+  "approval.effect.write": "此操作将修改账本文件，且仅执行本次批准的内容。",
+  "approval.effect.destructive": "此操作不可逆，请仔细确认。",
 } as const;
 
 export type I18nKey = keyof typeof zhCN;
@@ -294,6 +303,15 @@ const en: Record<I18nKey, string> = {
   "import.validation.tagInvalid": "Transaction {index} has an invalid tag: {tag}",
   "import.validation.multipleUnspecified": "Transaction {index} has multiple postings without amounts",
   "import.validation.unbalanced": "Transaction {index} is unbalanced ({currency} difference: {difference})",
+
+  "approval.title": "Approval required",
+  "approval.operation": "Tool {tool} requests a write operation",
+  "approval.args": "Operation arguments (changing any argument invalidates the approval)",
+  "approval.expires": "Auto-denied in {seconds}s",
+  "approval.approve": "Approve & run",
+  "approval.deny": "Deny",
+  "approval.effect.write": "This operation mutates the ledger files, and only the exact reviewed content runs.",
+  "approval.effect.destructive": "This operation is irreversible — please confirm carefully.",
 };
 
 const dict: Record<I18nKey, string> =

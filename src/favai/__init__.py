@@ -10,6 +10,7 @@ from typing import Any
 from fava.ext import FavaExtensionBase, extension_endpoint
 from flask import request
 
+from favai.capabilities import CapabilityStore
 from favai.config import (
     ConfigError,
     ProviderConfig,
@@ -62,6 +63,9 @@ class FavaAI(FavaExtensionBase):
 
     def __init__(self, ledger: Any, config: str | None = None) -> None:
         super().__init__(ledger, config)
+        # Single-use capability tokens granted after user approval of gated
+        # operations; in-memory only, never persisted.
+        self._capabilities = CapabilityStore()
         # Seed .favai/config.json from the beancount file's extension
         # declaration only once.  Once present, config.json is authoritative:
         # settings saved through the UI must survive Fava reloads.
@@ -100,6 +104,40 @@ class FavaAI(FavaExtensionBase):
     def data_dir(self) -> Path:
         """Directory holding favai's config files."""
         return data_dir_for(self.ledger.beancount_file_path)
+
+    @property
+    def capabilities(self) -> CapabilityStore:
+        """Capability store bound to this ledger instance."""
+        return self._capabilities
+
+    @property
+    def ledger_id(self) -> str:
+        """Stable identity used to bind capabilities to this ledger."""
+        return str(self.ledger.beancount_file_path)
+
+    # ------------------------------------------------------------------
+    # capability tokens (human-in-the-loop authorization)
+    # ------------------------------------------------------------------
+
+    @extension_endpoint("capability_mint", ["POST"])
+    @api_response
+    def api_capability_mint(self) -> dict[str, Any]:
+        """Mint a single-use capability after the user approved an operation.
+
+        The operation object (the tool's validated arguments) is hashed by the
+        backend, so the returned token only authorizes that exact operation on
+        this ledger within a short TTL.  The consuming write endpoint must
+        submit the same operation object and the token, and the token cannot
+        be reused.
+        """
+        payload = request.get_json(force=True)
+        grant = self._capabilities.mint(
+            operation=payload.get("operation"),
+            ledger_id=self.ledger_id,
+            session_id=str(payload.get("session_id") or ""),
+            risk=str(payload.get("risk") or "write"),
+        )
+        return grant
 
     # ------------------------------------------------------------------
     # status / config

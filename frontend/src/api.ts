@@ -52,6 +52,13 @@ export interface ImportConfirmResult {
   write_path: string | null;
 }
 
+export interface CapabilityGrant {
+  capability: string;
+  operation_hash: string;
+  risk: string;
+  expires_at: number;
+}
+
 export interface SessionSummary {
   id: string;
   title: string;
@@ -183,6 +190,11 @@ export const api = {
     postJson<Session>("session_save", state),
   deleteSession: (sessionId: string) =>
     postJson<{ deleted: boolean }>("session_delete", {
+      session_id: sessionId,
+    }),
+  mintCapability: (operation: unknown, sessionId?: string) =>
+    postJson<CapabilityGrant>("capability_mint", {
+      operation,
       session_id: sessionId,
     }),
 };

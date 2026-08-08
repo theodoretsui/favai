@@ -31,10 +31,12 @@ import {
   withBookkeepingHabits,
 } from "@/agent/prompts";
 import { createUnifiedAgent } from "@/agent/factory";
+import { ApprovalManager } from "@/agent/approval";
 import {
   ingestContentBlock,
   toChatMessages,
 } from "@/agent/toChatMessages";
+import { ApprovalPrompt } from "@/components/ApprovalPrompt";
 import { Chat } from "@/components/Chat";
 import { ProposalTable } from "@/components/ProposalTable";
 import { SessionSidebar } from "@/components/SessionSidebar";
@@ -98,6 +100,17 @@ export function UnifiedChat({
   const pendingProposalRef = useRef<Transaction[] | null>(null);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const editSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Human-in-the-loop approval state. In-memory application state only —
+  // never persisted into conversation history, and disposed with the
+  // component so pending approvals fail closed on teardown.
+  const approvalManagerRef = useRef<ApprovalManager | null>(null);
+  if (!approvalManagerRef.current) {
+    approvalManagerRef.current = new ApprovalManager();
+  }
+  const approvalManager = approvalManagerRef.current;
+  useEffect(() => approvalManager.subscribe(bump), [approvalManager, bump]);
+  useEffect(() => () => approvalManager.dispose(), [approvalManager]);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -174,6 +187,11 @@ export function UnifiedChat({
       bookkeepingHabits,
       (txns) => {
         applyProposal(txns);
+      },
+      {
+        manager: approvalManager,
+        getLedgerId: () => getLedgerData().baseUrl,
+        getSessionId: () => sessionRef.current?.id ?? undefined,
       },
     );
     if (sessionRef.current) {
@@ -532,6 +550,7 @@ export function UnifiedChat({
     ? toChatMessages(agent.state.messages, agent.state.streamingMessage)
     : [];
   const isGenerating = agent?.state.isStreaming ?? false;
+  const pendingApproval = approvalManager.current;
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -587,6 +606,13 @@ export function UnifiedChat({
         onLoadMore={() => void loadMoreSessions()}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-4">
+        {pendingApproval && (
+          <ApprovalPrompt
+            request={pendingApproval}
+            onApprove={() => approvalManager.approve(pendingApproval.id)}
+            onDeny={() => approvalManager.deny(pendingApproval.id)}
+          />
+        )}
         {!isConfigured && (
           <Alert
             type="warning"
