@@ -170,14 +170,19 @@ class CapabilityStore:
             self._capabilities[token] = consumed
             return consumed
 
-    @staticmethod
-    def _grant(capability: Capability) -> dict[str, Any]:
-        """Frontend-facing serialization of a minted grant."""
+    def _grant(self, capability: Capability) -> dict[str, Any]:
+        """Frontend-facing serialization of a minted grant.
+
+        Internal expiry is tracked on the monotonic clock; the frontend
+        compares against ``Date.now()``, so ``expires_at`` is converted to
+        epoch seconds here.
+        """
+        remaining = max(0.0, capability.expires_at - self._clock())
         return {
             "capability": capability.token,
             "operation_hash": capability.operation_hash,
             "risk": capability.risk,
-            "expires_at": capability.expires_at,
+            "expires_at": time.time() + remaining,
         }
 
     def _prune(self) -> None:

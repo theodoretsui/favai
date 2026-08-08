@@ -36,12 +36,17 @@ def make_store(ttl: float = 120.0) -> tuple[CapabilityStore, FakeClock]:
 
 
 def test_mint_returns_token_and_expiry() -> None:
-    store, clock = make_store()
+    store, _clock = make_store()
     grant = store.mint(operation=OP_A, ledger_id=LEDGER, session_id="s1")
 
     token = str(grant["capability"])
     assert len(token) >= 32
-    assert grant["expires_at"] == pytest.approx(clock.now + 120.0)
+    # The frontend-facing expiry is epoch seconds (not the internal monotonic
+    # clock), so it tracks wall-clock time regardless of when the store was
+    # created.
+    import time
+
+    assert grant["expires_at"] == pytest.approx(time.time() + 120.0, abs=1.0)
     assert grant["operation_hash"] == canonical_operation_hash(OP_A)
 
 
