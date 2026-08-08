@@ -16,39 +16,10 @@ from favai.config import ProviderConfig
 from favai.proxy import (
     _SAFE_UPSTREAM,
     ProxyError,
-    _build_upstream_body,
     _build_upstream_headers,
     _resolve_key,
     forward_llm,
 )
-
-# ---------------------------------------------------------------------------
-# _build_upstream_body
-# ---------------------------------------------------------------------------
-
-
-def test_qualified_model_is_unwrapped_for_upstream():
-    config = ProviderConfig(provider="openai", model="shared-model")
-    body = b'{"model":"openai/shared-model","messages":[]}'
-
-    result = _build_upstream_body(body, config)
-
-    assert result == b'{"model":"shared-model","messages":[]}'
-
-
-def test_legacy_unqualified_model_body_is_unchanged():
-    config = ProviderConfig(provider="openai", model="shared-model")
-    body = b'{"model": "shared-model", "messages": []}'
-
-    assert _build_upstream_body(body, config) is body
-
-
-def test_other_provider_model_body_is_unchanged():
-    config = ProviderConfig(provider="openai", model="shared-model")
-    body = b'{"model":"anthropic/shared-model","messages":[]}'
-
-    assert _build_upstream_body(body, config) is body
-
 
 # ---------------------------------------------------------------------------
 # _resolve_key
@@ -263,12 +234,14 @@ def test_forward_llm_reports_connection_error_and_closes_client(monkeypatch):
         api_key="test-key",
     )
 
+    body = b'{"model":"custom/gpt-5.6-sol","messages":[]}'
     with pytest.raises(ProxyError, match="连接 LLM 服务失败.*TLS handshake failed"):
         forward_llm(
             config,
             "/chat/completions",
-            b"{}",
+            body,
             {"content-type": "application/json"},
         )
 
+    assert client.build_request.call_args.kwargs["content"] is body
     client.close.assert_called_once_with()
