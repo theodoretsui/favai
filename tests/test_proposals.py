@@ -785,6 +785,23 @@ def test_confirmation_removes_pending_change_set(ledger):
     assert store.get("s1") is None
 
 
+def test_change_set_preview_includes_editable_typed_entries(ledger):
+    real_ledger, _, _ = ledger
+    store = ChangeSetStore()
+    change_set = store.update(
+        "s1", "transactions", {"transactions": [simple_txn()]}, real_ledger
+    )
+
+    preview = change_set.to_dict()
+
+    assert preview["transactions"] == change_set.transactions
+    assert preview["directives"] == []
+    assert preview["transactions"][0]["postings"][0]["units"] == {
+        "number": "50.00",
+        "currency": "CNY",
+    }
+
+
 def test_invalid_lot_reduction_blocks_proposal(ledger):
     real_ledger, main, sub = ledger
     # The lot must exist in the ledger before a reduction can be matched.

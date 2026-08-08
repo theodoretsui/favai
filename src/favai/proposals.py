@@ -663,6 +663,8 @@ class LedgerChangeSet:
             "revision": self.revision,
             "transaction_count": len(self.transactions),
             "directive_count": len(self.directives),
+            "transactions": self.transactions,
+            "directives": self.directives,
             "target_file": self.target_file,
             "preview": self.preview,
             "errors": self.errors,

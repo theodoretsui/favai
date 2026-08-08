@@ -81,6 +81,9 @@ const zhCN = {
   "proposal.transaction.remove": "删除此交易",
   "proposal.flag.incomplete": "待确认",
   "proposal.dirty.badge": "已手动修改",
+  "proposal.edit.unsaved": "修改尚未校验",
+  "proposal.edit.validate": "校验修改",
+  "proposal.edit.validated": "修改已校验，请确认最新版本后写入",
 
   "account.search.placeholder": "搜索或输入新账户…",
   "account.empty": "没有匹配的账户",
@@ -256,6 +259,10 @@ const en: Record<I18nKey, string> = {
   "proposal.transaction.remove": "Delete transaction",
   "proposal.flag.incomplete": "Needs review",
   "proposal.dirty.badge": "Edited",
+  "proposal.edit.unsaved": "Edits not validated",
+  "proposal.edit.validate": "Validate changes",
+  "proposal.edit.validated":
+    "Changes validated. Review the latest revision before writing.",
 
   "account.search.placeholder": "Search or type a new account…",
   "account.empty": "No matching account",
