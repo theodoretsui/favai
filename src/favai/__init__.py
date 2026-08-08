@@ -24,7 +24,12 @@ from favai.config import (
     save_bookkeeping_habits,
     save_config,
 )
-from favai.entries import source_file_options, to_fava_entries, write_entries
+from favai.entries import (
+    EntryError,
+    source_file_options,
+    to_fava_entries,
+    write_entries,
+)
 from favai.history import (
     HistoryError,
     archive_session,
@@ -36,6 +41,7 @@ from favai.history import (
     save_session,
 )
 from favai.ingest import ingest_uploads
+from favai.proposals import ChangeSetStore, confirm_change_set
 from favai.providers import list_provider_models
 from favai.proxy import ProxyError, forward_llm
 
@@ -66,6 +72,9 @@ class FavaAI(FavaExtensionBase):
         # Single-use capability tokens granted after user approval of gated
         # operations; in-memory only, never persisted.
         self._capabilities = CapabilityStore()
+        # Pending typed proposal change sets per conversation; in-memory only,
+        # never persisted into session history.
+        self._change_sets = ChangeSetStore()
         # Seed .favai/config.json from the beancount file's extension
         # declaration only once.  Once present, config.json is authoritative:
         # settings saved through the UI must survive Fava reloads.
@@ -368,3 +377,57 @@ class FavaAI(FavaExtensionBase):
         if session_id:
             mark_confirmed(self.data_dir, session_id, transactions=transactions)
         return {"inserted": len(entries), "write_path": write_path}
+
+    # ------------------------------------------------------------------
+    # typed change-set proposals (propose_transactions v2 / propose_directives)
+    # ------------------------------------------------------------------
+
+    @extension_endpoint("proposal_preview", ["GET", "POST"])
+    @api_response
+    def api_proposal_preview(self) -> dict[str, Any]:
+        """Validate a typed batch and update the pending change set.
+
+        A retry replaces its own latest batch; the change set is revalidated
+        as a whole (directives + transactions) in ledger context.  Validation
+        failures are returned as errors so the agent can repair the batch.
+        GET with a session id returns the stored change set for restore.
+        """
+        if request.method == "GET":
+            session_id = request.args.get("session_id", "")
+            change_set = self._change_sets.get(str(session_id))
+            if change_set is None:
+                msg = "没有待确认的提案，请让助手先提交交易或指令"
+                raise EntryError(msg)
+            return change_set.to_dict()
+        payload = request.get_json(force=True)
+        session_id = str(payload.get("session_id") or "")
+        tool = str(payload.get("tool") or "")
+        batch = payload.get("batch") or {}
+        change_set = self._change_sets.update(
+            session_id,
+            tool,
+            batch,
+            self.ledger,
+            target_file=str(payload.get("write_path") or "") or None,
+        )
+        return change_set.to_dict()
+
+    @extension_endpoint("proposal_confirm", ["POST"])
+    @api_response
+    def api_proposal_confirm(self) -> dict[str, Any]:
+        """Write the reviewed change set, bound to its exact revision."""
+        payload = request.get_json(force=True)
+        session_id = str(payload.get("session_id") or "")
+        revision = int(payload.get("revision") or -1)
+        write_path = str(payload.get("write_path") or "").strip() or None
+        result = confirm_change_set(
+            self.ledger, self._change_sets, session_id, revision, write_path
+        )
+        change_set = self._change_sets.get(session_id)
+        if session_id and change_set is not None:
+            mark_confirmed(
+                self.data_dir,
+                session_id,
+                transactions=change_set.transactions,
+            )
+        return result

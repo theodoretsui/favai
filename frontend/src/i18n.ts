@@ -59,6 +59,12 @@ const zhCN = {
 
   "proposal.title": "审核写入",
   "proposal.empty": "暂无提案，等待 LLM 提取结果。",
+  "proposal.change_set.revision": "版本 {revision}",
+  "proposal.change_set.summary":
+    "待写入 {transactions} 笔交易、{directives} 条指令；确认将写入完整变更集，版本变化后需重新确认。",
+  "propose.transactions.done": "已提交 {count} 笔交易提案，等待用户确认或反馈。",
+  "propose.directives.done": "已提交 {count} 条指令提案，等待用户确认或反馈。",
+  "propose.preview.revision": "变更集版本：{revision}",
   "proposal.new.available": "LLM 给出了新提案",
   "proposal.new.apply": "覆盖当前修改",
   "proposal.new.keep": "保留我的修改",
@@ -215,6 +221,14 @@ const en: Record<I18nKey, string> = {
 
   "proposal.title": "Review and write",
   "proposal.empty": "No proposal yet — waiting for the LLM to extract transactions.",
+  "proposal.change_set.revision": "Revision {revision}",
+  "proposal.change_set.summary":
+    "{transactions} transaction(s) and {directives} directive(s) pending; confirming writes the whole change set, and a new revision requires re-confirmation.",
+  "propose.transactions.done":
+    "Submitted {count} transaction proposal(s) for review — the ledger has not been written.",
+  "propose.directives.done":
+    "Submitted {count} directive proposal(s) for review — the ledger has not been written.",
+  "propose.preview.revision": "Change-set revision: {revision}",
   "proposal.new.available": "The LLM produced a new proposal",
   "proposal.new.apply": "Overwrite my edits",
   "proposal.new.keep": "Keep my edits",

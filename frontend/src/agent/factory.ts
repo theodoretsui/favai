@@ -4,7 +4,7 @@
  */
 
 import { Agent, type AgentTool, type StreamFn } from "@earendil-works/pi-agent-core";
-import type { Config, Transaction } from "@/api";
+import type { Config, ChangeSetPreview } from "@/api";
 import type { ApprovalManager } from "@/agent/approval";
 import {
   makeBeforeToolCallGate,
@@ -13,7 +13,8 @@ import {
 } from "@/agent/hitl";
 import { requiresApproval, resolveToolRisk } from "@/agent/risk";
 import { buildModels } from "@/agent/provider";
-import { makeImportTool } from "@/agent/tools/importTool";
+import { makeProposeTransactionsTool } from "@/agent/tools/proposeTransactionsTool";
+import { makeProposeDirectivesTool } from "@/agent/tools/proposeDirectivesTool";
 import { makeBqlTool } from "@/agent/tools/bqlTool";
 import { makeBqlHelpTool } from "@/agent/tools/bqlHelpTool";
 import {
@@ -55,18 +56,26 @@ function withApprovalGate(
  * Create a pi agent for an import session.
  *
  * @param config         - LLM provider configuration.
- * @param onProposal     - Called when the agent submits ``propose_transactions``.
+ * @param onProposal     - Called when the agent submits a change set.
+ * @param getSessionId   - Current conversation session id.
  * @param approval       - Optional HITL wiring for gated tools.
  * @returns              - An ``Agent`` ready to ``prompt()``.
  */
 export function createImportAgent(
   config: Config,
-  onProposal: (txns: Transaction[]) => void,
+  onProposal: (changeSet: ChangeSetPreview) => void,
+  getSessionId: () => string | undefined,
   approval?: ApprovalWiring,
 ) {
   const { models, model } = buildModels(config);
   const streamFn: StreamFn = (m, ctx, opts) => models.streamSimple(m, ctx, opts);
-  const gated = withApprovalGate([makeImportTool(onProposal)], approval);
+  const gated = withApprovalGate(
+    [
+      makeProposeTransactionsTool(onProposal, getSessionId),
+      makeProposeDirectivesTool(onProposal, getSessionId),
+    ],
+    approval,
+  );
 
   return new Agent({
     initialState: {
@@ -120,20 +129,28 @@ export function createChatAgent(
  *
  * @param config     - LLM provider configuration.
  * @param bookkeepingHabits - Ledger-wide user preferences.
- * @param onProposal - Called when the agent submits ``propose_transactions``.
+ * @param onProposal - Called when the agent submits a change set.
+ * @param getSessionId - Current conversation session id.
  * @param approval   - Optional HITL wiring for gated tools.
  * @returns          - An ``Agent`` ready to ``prompt()``.
  */
 export function createUnifiedAgent(
   config: Config,
   bookkeepingHabits: string,
-  onProposal: (txns: Transaction[]) => void,
+  onProposal: (changeSet: ChangeSetPreview) => void,
+  getSessionId: () => string | undefined,
   approval?: ApprovalWiring,
 ) {
   const { models, model } = buildModels(config);
   const streamFn: StreamFn = (m, ctx, opts) => models.streamSimple(m, ctx, opts);
   const gated = withApprovalGate(
-    [makeImportTool(onProposal), makeBqlHelpTool(), makeBqlTool(), makeTodayTool()],
+    [
+      makeProposeTransactionsTool(onProposal, getSessionId),
+      makeProposeDirectivesTool(onProposal, getSessionId),
+      makeBqlHelpTool(),
+      makeBqlTool(),
+      makeTodayTool(),
+    ],
     approval,
   );
 
