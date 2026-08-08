@@ -4,9 +4,10 @@
  */
 
 import { Agent, type StreamFn } from "@earendil-works/pi-agent-core";
-import type { Config, Transaction } from "@/api";
+import type { Config, ChangeSetPreview } from "@/api";
 import { buildModels } from "@/agent/provider";
-import { makeImportTool } from "@/agent/tools/importTool";
+import { makeProposeTransactionsTool } from "@/agent/tools/proposeTransactionsTool";
+import { makeProposeDirectivesTool } from "@/agent/tools/proposeDirectivesTool";
 import { makeBqlTool } from "@/agent/tools/bqlTool";
 import { makeBqlHelpTool } from "@/agent/tools/bqlHelpTool";
 import {
@@ -20,12 +21,14 @@ import { makeTodayTool } from "@/agent/tools/dateTool";
  * Create a pi agent for an import session.
  *
  * @param config         - LLM provider configuration.
- * @param onProposal     - Called when the agent submits ``propose_transactions``.
+ * @param onProposal     - Called when the agent submits a change set.
+ * @param getSessionId   - Current conversation session id.
  * @returns              - An ``Agent`` ready to ``prompt()``.
  */
 export function createImportAgent(
   config: Config,
-  onProposal: (txns: Transaction[]) => void,
+  onProposal: (changeSet: ChangeSetPreview) => void,
+  getSessionId: () => string | undefined,
 ) {
   const { models, model } = buildModels(config);
   const streamFn: StreamFn = (m, ctx, opts) => models.streamSimple(m, ctx, opts);
@@ -34,7 +37,10 @@ export function createImportAgent(
     initialState: {
       systemPrompt: "", // The bill-materials prompt is sent as the first user message.
       model,
-      tools: [makeImportTool(onProposal)],
+      tools: [
+        makeProposeTransactionsTool(onProposal, getSessionId),
+        makeProposeDirectivesTool(onProposal, getSessionId),
+      ],
     },
     streamFn,
   });
@@ -80,7 +86,8 @@ export function createChatAgent(config: Config, bookkeepingHabits = "") {
 export function createUnifiedAgent(
   config: Config,
   bookkeepingHabits: string,
-  onProposal: (txns: Transaction[]) => void,
+  onProposal: (changeSet: ChangeSetPreview) => void,
+  getSessionId: () => string | undefined,
 ) {
   const { models, model } = buildModels(config);
   const streamFn: StreamFn = (m, ctx, opts) => models.streamSimple(m, ctx, opts);
@@ -93,7 +100,8 @@ export function createUnifiedAgent(
       ),
       model,
       tools: [
-        makeImportTool(onProposal),
+        makeProposeTransactionsTool(onProposal, getSessionId),
+        makeProposeDirectivesTool(onProposal, getSessionId),
         makeBqlHelpTool(),
         makeBqlTool(),
         makeTodayTool(),

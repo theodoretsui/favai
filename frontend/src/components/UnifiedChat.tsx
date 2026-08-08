@@ -17,11 +17,11 @@ import {
 import {
   api,
   type ApiKind,
+  type ChangeSetPreview,
   type Config,
   type Session,
   type SessionSummary,
   type Status,
-  type Transaction,
 } from "@/api";
 import { t } from "@/i18n";
 import { getLedgerData } from "@/agent/favaApi";
@@ -36,7 +36,6 @@ import {
   toChatMessages,
 } from "@/agent/toChatMessages";
 import { Chat } from "@/components/Chat";
-import { ProposalTable } from "@/components/ProposalTable";
 import { SessionSidebar } from "@/components/SessionSidebar";
 import { ImportedTransactions } from "@/components/ImportedTransactions";
 import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
@@ -76,12 +75,7 @@ export function UnifiedChat({
   const [isProcessing, setIsProcessing] = useState(false);
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[] | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[] | null>(null);
-  const [dirty, setDirty] = useState(false);
-  const [pendingProposal, setPendingProposal] = useState<Transaction[] | null>(
-    null,
-  );
-  const [accounts, setAccounts] = useState<string[]>([]);
+  const [changeSet, setChangeSet] = useState<ChangeSetPreview | null>(null);
   const [writePath, setWritePath] = useState(DEFAULT_WRITE_PATH);
   const [providerConfigs, setProviderConfigs] = useState<Config[]>([]);
   const [selectedProvider, setSelectedProvider] = useState("");
@@ -93,11 +87,8 @@ export function UnifiedChat({
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const agentRef = useRef<Agent | null>(null);
   const sessionRef = useRef<Session | null>(null);
-  const transactionsRef = useRef<Transaction[] | null>(null);
-  const dirtyRef = useRef(false);
-  const pendingProposalRef = useRef<Transaction[] | null>(null);
+  const changeSetRef = useRef<ChangeSetPreview | null>(null);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
-  const editSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -125,16 +116,6 @@ export function UnifiedChat({
       setIsLoadingMoreSessions(false);
     }
   }, [hasMoreSessions, isLoadingMoreSessions, sessions.length]);
-
-  // Load ledger accounts on mount.
-  useEffect(() => {
-    try {
-      const data = getLedgerData();
-      setAccounts(data.accounts);
-    } catch {
-      // AccountCombobox falls back to free-form input.
-    }
-  }, []);
 
   useEffect(() => {
     refreshSessions();
@@ -172,9 +153,10 @@ export function UnifiedChat({
     const agent = createUnifiedAgent(
       { ...effectiveConfig, api: effectiveApi, model: effectiveModel },
       bookkeepingHabits,
-      (txns) => {
-        applyProposal(txns);
+      (changeSet) => {
+        applyProposal(changeSet);
       },
+      () => sessionRef.current?.id ?? undefined,
     );
     if (sessionRef.current) {
       agent.state.messages = sessionRef.current.messages as AgentMessage[];
@@ -211,19 +193,9 @@ export function UnifiedChat({
     setCurrentSession(session);
   }
 
-  function replaceTransactions(value: Transaction[] | null) {
-    transactionsRef.current = value;
-    setTransactions(value);
-  }
-
-  function replaceDirty(value: boolean) {
-    dirtyRef.current = value;
-    setDirty(value);
-  }
-
-  function replacePendingProposal(value: Transaction[] | null) {
-    pendingProposalRef.current = value;
-    setPendingProposal(value);
+  function replaceChangeSet(value: ChangeSetPreview | null) {
+    changeSetRef.current = value;
+    setChangeSet(value);
   }
 
   function persistSession() {
@@ -235,9 +207,9 @@ export function UnifiedChat({
         session_id: session.id,
         expected_revision: session.revision,
         messages: agent.state.messages,
-        proposal: transactionsRef.current,
-        proposal_dirty: dirtyRef.current,
-        pending_proposal: pendingProposalRef.current,
+        proposal: null,
+        proposal_dirty: false,
+        pending_proposal: null,
       });
       setSession(saved);
       await refreshSessions();
@@ -247,28 +219,9 @@ export function UnifiedChat({
     return saveChainRef.current;
   }
 
-  function scheduleEditSave() {
-    if (editSaveTimerRef.current) clearTimeout(editSaveTimerRef.current);
-    editSaveTimerRef.current = setTimeout(() => {
-      editSaveTimerRef.current = null;
-      void persistSession();
-    }, 750);
-  }
-
-  async function flushScheduledEditSave() {
-    if (!editSaveTimerRef.current) return;
-    clearTimeout(editSaveTimerRef.current);
-    editSaveTimerRef.current = null;
-    await persistSession();
-  }
-
-  function applyProposal(proposal: Transaction[] | null) {
-    if (!proposal) return;
-    if (transactionsRef.current !== null && dirtyRef.current) {
-      replacePendingProposal(proposal);
-    } else {
-      replaceTransactions(proposal);
-    }
+  function applyProposal(changeSet: ChangeSetPreview | null) {
+    if (!changeSet) return;
+    replaceChangeSet(changeSet);
   }
 
   // Wrap setFiles: warn immediately when an image is attached but neither
@@ -308,9 +261,7 @@ export function UnifiedChat({
   function resetSession() {
     agentRef.current?.reset();
     setSession(null);
-    replaceTransactions(null);
-    replaceDirty(false);
-    replacePendingProposal(null);
+    replaceChangeSet(null);
     setFiles(null);
     bump();
   }
@@ -318,16 +269,20 @@ export function UnifiedChat({
   async function openSession(sessionId: string) {
     if (isProcessing || agentRef.current?.state.isStreaming) return;
     try {
-      await flushScheduledEditSave();
       const session = await api.getSession(sessionId);
       setSession(session);
       setSelectedProvider(session.model_provider || config?.provider || "");
       setSelectedModel(session.model_name);
       setAgentEpoch((value) => value + 1);
-      replaceTransactions(session.proposal);
-      replaceDirty(Boolean(session.proposal_dirty));
-      replacePendingProposal(session.pending_proposal);
       setFiles(null);
+      // Restore the pending change set from the backend (in-memory per
+      // ledger/session); legacy sessions without one start clean.
+      try {
+        const proposal = await api.getProposal(sessionId);
+        replaceChangeSet(proposal);
+      } catch {
+        replaceChangeSet(null);
+      }
       bump();
     } catch (err) {
       showError(err);
@@ -336,7 +291,6 @@ export function UnifiedChat({
 
   async function newSession() {
     if (isProcessing || agentRef.current?.state.isStreaming) return;
-    await flushScheduledEditSave();
     resetSession();
   }
 
@@ -498,21 +452,20 @@ export function UnifiedChat({
   }
 
   async function confirm() {
-    if (!transactions) return;
+    const current = changeSetRef.current;
+    const sessionId = currentSession?.id;
+    if (!current || !sessionId) return;
     try {
-      await flushScheduledEditSave();
-      const result = await api.importConfirm(
-        transactions,
-        currentSession?.id,
+      const result = await api.proposalConfirm(
+        sessionId,
+        current.revision,
         writePath === DEFAULT_WRITE_PATH ? undefined : writePath,
       );
       void message.success(t("confirm.success", { count: result.inserted }));
-      replaceDirty(false);
-      replacePendingProposal(null);
+      replaceChangeSet(null);
       if (currentSession) {
-        const session = await api.getSession(currentSession.id);
+        const session = await api.getSession(sessionId);
         setSession(session);
-        replaceTransactions(session.proposal);
       }
       await refreshSessions();
     } catch (err) {
@@ -652,60 +605,29 @@ export function UnifiedChat({
           />
         </Card>
 
-        {transactions && (
+        {changeSet && (
           <Card
             size="small"
             title={
               <Space>
                 <span>{t("proposal.title")}</span>
-                {dirty && <Tag>{t("proposal.dirty.badge")}</Tag>}
+                <Tag>{t("proposal.change_set.revision", { revision: changeSet.revision })}</Tag>
               </Space>
             }
           >
             <div className="flex flex-col gap-3">
-              {pendingProposal && (
-                <Alert
-                  type="info"
-                  showIcon
-                  message={t("proposal.new.available")}
-                  action={
-                    <Space size={4}>
-                      <Button
-                        size="small"
-                        type="primary"
-                        onClick={() => {
-                          replaceTransactions(pendingProposal);
-                          replacePendingProposal(null);
-                          replaceDirty(false);
-                          scheduleEditSave();
-                        }}
-                      >
-                        {t("proposal.new.apply")}
-                      </Button>
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          replacePendingProposal(null);
-                          scheduleEditSave();
-                        }}
-                      >
-                        {t("proposal.new.keep")}
-                      </Button>
-                    </Space>
-                  }
-                />
-              )}
-
-              {transactions.length > 0 ? (
-                <ProposalTable
-                  transactions={transactions}
-                  accounts={accounts}
-                  onChange={(next) => {
-                    replaceTransactions(next);
-                    replaceDirty(true);
-                    scheduleEditSave();
-                  }}
-                />
+              <Alert
+                type="info"
+                showIcon
+                message={t("proposal.change_set.summary", {
+                  directives: changeSet.directive_count,
+                  transactions: changeSet.transaction_count,
+                })}
+              />
+              {changeSet.preview ? (
+                <pre className="m-0 max-h-96 overflow-auto rounded bg-black/5 p-3 text-xs whitespace-pre-wrap">
+                  {changeSet.preview}
+                </pre>
               ) : (
                 <Empty description={t("proposal.empty")} />
               )}
@@ -737,7 +659,7 @@ export function UnifiedChat({
                 <Button
                   type="primary"
                   onClick={() => void confirm()}
-                  disabled={isGenerating || transactions.length === 0}
+                  disabled={isGenerating || !currentSession}
                 >
                   {t("confirm.submit")}
                 </Button>

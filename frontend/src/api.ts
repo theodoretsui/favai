@@ -31,10 +31,33 @@ export interface BookkeepingHabits {
   bookkeeping_habits: string;
 }
 
+export interface PostingUnits {
+  number: string;
+  currency: string;
+}
+
+export interface PostingCost {
+  kind: "per_unit" | "total" | "compound";
+  number?: string;
+  per_number?: string;
+  total_number?: string;
+  currency: string;
+  date?: string;
+}
+
+export interface PostingPrice {
+  kind: "per_unit" | "total";
+  number: string;
+  currency: string;
+}
+
 export interface Posting {
   account: string;
-  amount?: string;
-  currency?: string;
+  flag?: string;
+  units?: PostingUnits;
+  cost?: PostingCost;
+  price?: PostingPrice;
+  metadata?: Record<string, string | number | boolean>;
 }
 
 export interface Transaction {
@@ -45,6 +68,33 @@ export interface Transaction {
   postings: Posting[];
   tags?: string[];
   links?: string[];
+  metadata?: Record<string, string | number | boolean>;
+}
+
+export interface Directive {
+  kind: "open" | "commodity" | "price" | "balance" | "note" | "event";
+  date: string;
+  account?: string;
+  currency?: string;
+  currencies?: string[];
+  booking?: string;
+  commodity?: string;
+  amount?: { number: string; currency: string };
+  comment?: string;
+  type?: string;
+  description?: string;
+  metadata?: Record<string, string | number | boolean>;
+}
+
+export interface ChangeSetPreview {
+  id: string;
+  revision: number;
+  transaction_count: number;
+  directive_count: number;
+  target_file: string | null;
+  preview: string;
+  errors: string[];
+  warnings: string[];
 }
 
 export interface ImportConfirmResult {
@@ -165,6 +215,28 @@ export const api = {
     postJson<ImportConfirmResult>("import_confirm", {
       transactions,
       session_id: sessionId,
+      write_path: writePath,
+    }),
+  proposalPreview: (
+    tool: "transactions" | "directives",
+    batch: { transactions?: Transaction[]; directives?: Directive[] },
+    sessionId?: string,
+    writePath?: string,
+  ) =>
+    postJson<ChangeSetPreview>("proposal_preview", {
+      session_id: sessionId,
+      tool,
+      batch,
+      write_path: writePath,
+    }),
+  getProposal: (sessionId?: string) =>
+    request<ChangeSetPreview>(
+      `proposal_preview?session_id=${encodeURIComponent(sessionId ?? "")}`,
+    ),
+  proposalConfirm: (sessionId: string, revision: number, writePath?: string) =>
+    postJson<ImportConfirmResult>("proposal_confirm", {
+      session_id: sessionId,
+      revision,
       write_path: writePath,
     }),
   listSessions: (offset = 0, limit = 30) =>
