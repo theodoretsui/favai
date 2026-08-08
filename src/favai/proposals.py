@@ -24,7 +24,6 @@ from favai.entries import EntryError, resolve_source_file, source_file_options
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _SIGNED_NUM_RE = re.compile(r"^-?\d+(\.\d+)?$")
 _UNSIGNED_NUM_RE = re.compile(r"^\d+(\.\d+)?$")
-_ACCOUNT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:-]*$")
 _CURRENCY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 _META_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 _FLAG_RE = re.compile(r"^[A-Za-z!?*]$")
@@ -78,8 +77,20 @@ def _valid_date(value: Any, what: str) -> str:
 
 def _valid_account(value: Any) -> str:
     account = str(value or "").strip()
-    if not _ACCOUNT_RE.match(account):
+    if not account:
         msg = f"账户名无效：{value!r}"
+        raise EntryError(msg)
+    if _CONTROL_RE.search(account) or _WHITESPACE_RE.search(account):
+        msg = f"账户名无效：{account!r}"
+        raise EntryError(msg)
+    # Use the same Beancount parser that will consume the rendered source.
+    # This lets CJK characters appear from the third component onward, just
+    # like Beancount itself allows, instead of forcing an ASCII-only regex.
+    from beancount.parser.parser import parse_string
+
+    _, errors, _ = parse_string(f"1900-01-01 open {account} CNY\n")
+    if errors:
+        msg = f"账户名无效：{account!r}"
         raise EntryError(msg)
     return account
 

@@ -9,6 +9,7 @@ import pytest
 from favai.entries import EntryError
 from favai.proposals import (
     ChangeSetStore,
+    _valid_account,
     confirm_change_set,
     render_directive,
     render_transaction,
@@ -23,6 +24,7 @@ option "booking_method" "STRICT"
 2026-01-01 open Assets:CN:Bank
 2026-01-01 open Assets:Broker
 2026-01-01 open Expenses:Food
+2026-01-01 open Expenses:Food:饮料
 2026-01-01 open Expenses:Broker:Fees
 2026-01-01 open Income:CapitalGains USD
 2026-01-01 commodity GOOG
@@ -300,6 +302,22 @@ def test_validation_rejects_control_characters():
         )
 
 
+def test_valid_account_accepts_unicode_from_third_component():
+    assert _valid_account("Expenses:Food:饮料") == "Expenses:Food:饮料"
+    assert _valid_account("Assets:CN:Bank:工资") == "Assets:CN:Bank:工资"
+
+
+def test_invalid_account_rejected():
+    with pytest.raises(EntryError, match="账户名无效"):
+        _valid_account("Expenses:饮料")
+    with pytest.raises(EntryError, match="账户名无效"):
+        _valid_account("Assets:Foo Bar")
+    with pytest.raises(EntryError, match="账户名无效"):
+        _valid_account("Assets:Foo:bar")
+    with pytest.raises(EntryError, match="账户名无效"):
+        _valid_account("")
+
+
 # ---------------------------------------------------------------------------
 # schema validation
 # ---------------------------------------------------------------------------
@@ -401,6 +419,32 @@ def test_simple_import_writes_canonical_source(ledger):
     written = main.read_text() + sub.read_text()
     assert '2026-01-02 * "" "lunch"' in written
     assert "Expenses:Food  50.00 CNY" in written
+
+
+def test_chinese_account_transaction_roundtrip(ledger):
+    real_ledger, main, sub = ledger
+    store = ChangeSetStore()
+    txn = {
+        "date": "2026-01-02",
+        "narration": "奶茶",
+        "postings": [
+            {
+                "account": "Expenses:Food:饮料",
+                "units": {"number": "28.00", "currency": "CNY"},
+            },
+            {
+                "account": "Assets:CN:Bank",
+                "units": {"number": "-28.00", "currency": "CNY"},
+            },
+        ],
+    }
+    cs = store.update("s1", "transactions", {"transactions": [txn]}, real_ledger)
+    assert cs.errors == []
+
+    result = confirm_change_set(real_ledger, store, "s1", cs.revision, None)
+    assert result["inserted"] == 1
+    written = main.read_text() + sub.read_text()
+    assert "Expenses:Food:饮料  28.00 CNY" in written
 
 
 def test_foreign_exchange_conversion(ledger):
