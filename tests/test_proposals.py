@@ -773,6 +773,18 @@ def test_revision_mismatch_blocks_confirmation(ledger):
         confirm_change_set(real_ledger, store, "s1", 999, None)
 
 
+def test_confirmation_removes_pending_change_set(ledger):
+    real_ledger, _, _ = ledger
+    store = ChangeSetStore()
+    change_set = store.update(
+        "s1", "transactions", {"transactions": [simple_txn()]}, real_ledger
+    )
+
+    confirm_change_set(real_ledger, store, "s1", change_set.revision, None)
+
+    assert store.get("s1") is None
+
+
 def test_invalid_lot_reduction_blocks_proposal(ledger):
     real_ledger, main, sub = ledger
     # The lot must exist in the ledger before a reduction can be matched.

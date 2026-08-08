@@ -679,6 +679,11 @@ class ChangeSetStore:
     def get(self, session_id: str) -> LedgerChangeSet | None:
         return self._sets.get(session_id)
 
+    def discard(self, session_id: str, change_set: LedgerChangeSet) -> None:
+        """Remove a confirmed change set unless it was replaced concurrently."""
+        if self._sets.get(session_id) is change_set:
+            del self._sets[session_id]
+
     def update(
         self,
         session_id: str,
@@ -803,6 +808,7 @@ def confirm_change_set(
     if source:
         source = source.rstrip("\n") + "\n\n"
     ledger.file.set_source(source_path, source + rendered, current_checksum)
+    store.discard(session_id, change_set)
     return {
         "inserted": len(change_set.transactions) + len(change_set.directives),
         "write_path": str(write_path or change_set.target_file),
