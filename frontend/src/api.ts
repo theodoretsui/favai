@@ -246,6 +246,24 @@ export const api = {
       revision,
       write_path: writePath,
     }),
+  createLedgerFile: (payload: {
+    capability: string;
+    operation: {
+      path: string;
+      initial_content: string;
+      include_in_main: boolean;
+    };
+    sessionId?: string;
+  }) =>
+    postJson<{
+      created_path: string;
+      include_path: string;
+      already_completed: boolean;
+    }>("ledger_file_create", {
+      capability: payload.capability,
+      operation: payload.operation,
+      session_id: payload.sessionId,
+    }),
   listSessions: (offset = 0, limit = 30) =>
     request<SessionListResult>(`sessions?limit=${limit}&offset=${offset}`),
   createSession: (config: Config) =>

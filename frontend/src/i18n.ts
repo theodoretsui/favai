@@ -162,6 +162,11 @@ const zhCN = {
   "approval.deny": "拒绝",
   "approval.effect.write": "此操作将修改账本文件，且仅执行本次批准的内容。",
   "approval.effect.destructive": "此操作不可逆，请仔细确认。",
+  "approval.effect.create_file":
+    "将在账本目录下创建新文件，并在主账本文件末尾追加 include 语句。文件已存在时不会覆盖。",
+  "create_file.done.created": "已创建 {path} 并写入 include 到 {include}。",
+  "create_file.done.already": "{path} 已存在且内容一致，include 已在 {include} 中。",
+  "create_file.error.no_approval": "该写入操作未获得批准，无法执行。",
 } as const;
 
 export type I18nKey = keyof typeof zhCN;
@@ -326,6 +331,11 @@ const en: Record<I18nKey, string> = {
   "approval.deny": "Deny",
   "approval.effect.write": "This operation mutates the ledger files, and only the exact reviewed content runs.",
   "approval.effect.destructive": "This operation is irreversible — please confirm carefully.",
+  "approval.effect.create_file":
+    "Creates a new file under the ledger directory and appends an include statement to the main ledger file. Existing files are never overwritten.",
+  "create_file.done.created": "Created {path} and added include to {include}.",
+  "create_file.done.already": "{path} already exists with identical content; include is already in {include}.",
+  "create_file.error.no_approval": "This write was not approved and cannot run.",
 };
 
 const dict: Record<I18nKey, string> =

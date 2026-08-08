@@ -17,6 +17,7 @@ import { makeProposeTransactionsTool } from "@/agent/tools/proposeTransactionsTo
 import { makeProposeDirectivesTool } from "@/agent/tools/proposeDirectivesTool";
 import { makeBqlTool } from "@/agent/tools/bqlTool";
 import { makeBqlHelpTool } from "@/agent/tools/bqlHelpTool";
+import { makeCreateLedgerFileTool } from "@/agent/tools/createLedgerFileTool";
 import {
   CHAT_SYSTEM_PROMPT,
   UNIFIED_SYSTEM_PROMPT,
@@ -147,6 +148,7 @@ export function createUnifiedAgent(
     [
       makeProposeTransactionsTool(onProposal, getSessionId),
       makeProposeDirectivesTool(onProposal, getSessionId),
+      makeCreateLedgerFileTool(approval?.manager),
       makeBqlHelpTool(),
       makeBqlTool(),
       makeTodayTool(),

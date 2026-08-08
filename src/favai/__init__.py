@@ -30,6 +30,7 @@ from favai.entries import (
     to_fava_entries,
     write_entries,
 )
+from favai.file_creation import create_and_include_gated
 from favai.history import (
     HistoryError,
     archive_session,
@@ -147,6 +148,30 @@ class FavaAI(FavaExtensionBase):
             risk=str(payload.get("risk") or "write"),
         )
         return grant
+
+    # ------------------------------------------------------------------
+    # gated ledger-file creation (create-and-include)
+    # ------------------------------------------------------------------
+
+    @extension_endpoint("ledger_file_create", ["POST"])
+    @api_response
+    def api_ledger_file_create(self) -> dict[str, Any]:
+        """Create a new .beancount source file and include it in the ledger.
+
+        Requires a valid single-use capability minted after explicit user
+        approval of the exact operation.  Path, payload, checksum, and
+        duplicate-include constraints are all revalidated here, so bypassing
+        the frontend never grants access.
+        """
+        payload = request.get_json(force=True)
+        return create_and_include_gated(
+            self.ledger,
+            self._capabilities,
+            self.ledger_id,
+            session_id=str(payload.get("session_id") or ""),
+            token=str(payload.get("capability") or ""),
+            operation=payload.get("operation") or {},
+        )
 
     # ------------------------------------------------------------------
     # status / config

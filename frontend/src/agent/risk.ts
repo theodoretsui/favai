@@ -24,6 +24,8 @@ export const DEFAULT_TOOL_RISK: ToolRiskRegistry = {
   bql_help: { policy: "read" },
   bql_query: { policy: "read" },
   propose_transactions: { policy: "propose" },
+  propose_directives: { policy: "propose" },
+  create_ledger_file: { policy: "write", effectKey: "approval.effect.create_file" },
 };
 
 /**
