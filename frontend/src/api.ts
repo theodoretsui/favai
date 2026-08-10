@@ -91,6 +91,8 @@ export interface ChangeSetPreview {
   revision: number;
   transaction_count: number;
   directive_count: number;
+  transactions: Transaction[];
+  directives: Directive[];
   target_file: string | null;
   preview: string;
   errors: string[];

@@ -445,10 +445,10 @@ class FavaAI(FavaExtensionBase):
         session_id = str(payload.get("session_id") or "")
         revision = int(payload.get("revision") or -1)
         write_path = str(payload.get("write_path") or "").strip() or None
+        change_set = self._change_sets.get(session_id)
         result = confirm_change_set(
             self.ledger, self._change_sets, session_id, revision, write_path
         )
-        change_set = self._change_sets.get(session_id)
         if session_id and change_set is not None:
             mark_confirmed(
                 self.data_dir,

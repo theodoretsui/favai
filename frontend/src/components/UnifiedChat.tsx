@@ -22,6 +22,7 @@ import {
   type Session,
   type SessionSummary,
   type Status,
+  type Transaction,
 } from "@/api";
 import { t } from "@/i18n";
 import { getLedgerData } from "@/agent/favaApi";
@@ -39,6 +40,8 @@ import {
 import { Chat } from "@/components/Chat";
 import { SessionSidebar } from "@/components/SessionSidebar";
 import { ImportedTransactions } from "@/components/ImportedTransactions";
+import { ProposalTable } from "@/components/ProposalTable";
+import { prepareTransactionsForValidation } from "@/components/proposalEditing";
 import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
 
 interface ModelChoice {
@@ -77,6 +80,9 @@ export function UnifiedChat({
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[] | null>(null);
   const [changeSet, setChangeSet] = useState<ChangeSetPreview | null>(null);
+  const [proposalDraft, setProposalDraft] = useState<Transaction[]>([]);
+  const [proposalDirty, setProposalDirty] = useState(false);
+  const [isValidatingProposal, setIsValidatingProposal] = useState(false);
   const [writePath, setWritePath] = useState(DEFAULT_WRITE_PATH);
   const [providerConfigs, setProviderConfigs] = useState<Config[]>([]);
   const [selectedProvider, setSelectedProvider] = useState("");
@@ -213,6 +219,8 @@ export function UnifiedChat({
   function replaceChangeSet(value: ChangeSetPreview | null) {
     changeSetRef.current = value;
     setChangeSet(value);
+    setProposalDraft(value?.transactions ?? []);
+    setProposalDirty(false);
   }
 
   function persistSession() {
@@ -490,6 +498,26 @@ export function UnifiedChat({
     }
   }
 
+  async function validateProposalEdits() {
+    const sessionId = currentSession?.id;
+    if (!changeSet || !sessionId || !proposalDirty) return;
+    setIsValidatingProposal(true);
+    try {
+      const updated = await api.proposalPreview(
+        "transactions",
+        { transactions: prepareTransactionsForValidation(proposalDraft) },
+        sessionId,
+        writePath === DEFAULT_WRITE_PATH ? undefined : writePath,
+      );
+      replaceChangeSet(updated);
+      void message.success(t("proposal.edit.validated"));
+    } catch (err) {
+      showError(err);
+    } finally {
+      setIsValidatingProposal(false);
+    }
+  }
+
   async function discard() {
     resetSession();
     void message.success(t("discard.done"));
@@ -653,6 +681,16 @@ export function UnifiedChat({
                   transactions: changeSet.transaction_count,
                 })}
               />
+              {proposalDraft.length > 0 && (
+                <ProposalTable
+                  transactions={proposalDraft}
+                  accounts={getLedgerData().accounts}
+                  onChange={(transactions) => {
+                    setProposalDraft(transactions);
+                    setProposalDirty(true);
+                  }}
+                />
+              )}
               {changeSet.preview ? (
                 <pre className="m-0 max-h-96 overflow-auto rounded bg-black/5 p-3 text-xs whitespace-pre-wrap">
                   {changeSet.preview}
@@ -662,6 +700,9 @@ export function UnifiedChat({
               )}
 
               <Space wrap align="end">
+                {proposalDirty && (
+                  <Tag color="warning">{t("proposal.edit.unsaved")}</Tag>
+                )}
                 {status && status.source_files.length > 0 && (
                   <Form.Item
                     label={t("confirm.write.path")}
@@ -686,9 +727,23 @@ export function UnifiedChat({
                   </Form.Item>
                 )}
                 <Button
+                  onClick={() => void validateProposalEdits()}
+                  disabled={
+                    !proposalDirty || isGenerating || isValidatingProposal
+                  }
+                  loading={isValidatingProposal}
+                >
+                  {t("proposal.edit.validate")}
+                </Button>
+                <Button
                   type="primary"
                   onClick={() => void confirm()}
-                  disabled={isGenerating || !currentSession}
+                  disabled={
+                    isGenerating ||
+                    !currentSession ||
+                    proposalDirty ||
+                    isValidatingProposal
+                  }
                 >
                   {t("confirm.submit")}
                 </Button>

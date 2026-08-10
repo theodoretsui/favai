@@ -9,6 +9,7 @@ import pytest
 from favai.entries import EntryError
 from favai.proposals import (
     ChangeSetStore,
+    _valid_account,
     confirm_change_set,
     render_directive,
     render_transaction,
@@ -23,6 +24,7 @@ option "booking_method" "STRICT"
 2026-01-01 open Assets:CN:Bank
 2026-01-01 open Assets:Broker
 2026-01-01 open Expenses:Food
+2026-01-01 open Expenses:Food:饮料
 2026-01-01 open Expenses:Broker:Fees
 2026-01-01 open Income:CapitalGains USD
 2026-01-01 commodity GOOG
@@ -300,6 +302,22 @@ def test_validation_rejects_control_characters():
         )
 
 
+def test_valid_account_accepts_unicode_from_third_component():
+    assert _valid_account("Expenses:Food:饮料") == "Expenses:Food:饮料"
+    assert _valid_account("Assets:CN:Bank:工资") == "Assets:CN:Bank:工资"
+
+
+def test_invalid_account_rejected():
+    with pytest.raises(EntryError, match="账户名无效"):
+        _valid_account("Expenses:饮料")
+    with pytest.raises(EntryError, match="账户名无效"):
+        _valid_account("Assets:Foo Bar")
+    with pytest.raises(EntryError, match="账户名无效"):
+        _valid_account("Assets:Foo:bar")
+    with pytest.raises(EntryError, match="账户名无效"):
+        _valid_account("")
+
+
 # ---------------------------------------------------------------------------
 # schema validation
 # ---------------------------------------------------------------------------
@@ -403,6 +421,32 @@ def test_simple_import_writes_canonical_source(ledger):
     assert "Expenses:Food  50.00 CNY" in written
 
 
+def test_chinese_account_transaction_roundtrip(ledger):
+    real_ledger, main, sub = ledger
+    store = ChangeSetStore()
+    txn = {
+        "date": "2026-01-02",
+        "narration": "奶茶",
+        "postings": [
+            {
+                "account": "Expenses:Food:饮料",
+                "units": {"number": "28.00", "currency": "CNY"},
+            },
+            {
+                "account": "Assets:CN:Bank",
+                "units": {"number": "-28.00", "currency": "CNY"},
+            },
+        ],
+    }
+    cs = store.update("s1", "transactions", {"transactions": [txn]}, real_ledger)
+    assert cs.errors == []
+
+    result = confirm_change_set(real_ledger, store, "s1", cs.revision, None)
+    assert result["inserted"] == 1
+    written = main.read_text() + sub.read_text()
+    assert "Expenses:Food:饮料  28.00 CNY" in written
+
+
 def test_foreign_exchange_conversion(ledger):
     real_ledger, _, _ = ledger
     store = ChangeSetStore()
@@ -444,6 +488,50 @@ def test_security_purchase_with_cost(ledger):
         ],
     }
     cs = store.update("s1", "transactions", {"transactions": [txn]}, real_ledger)
+    assert cs.errors == []
+
+
+def test_context_validation_rebooks_existing_cost_before_interpolation(tmp_path):
+    """Already-booked Fava costs must not be passed back as parser CostSpecs."""
+    from beancount.core.number import MISSING
+    from beancount.core.position import Cost
+    from fava.core import FavaLedger
+
+    source = tmp_path / "cost.beancount"
+    source.write_text(
+        LEDGER_SOURCE
+        + """
+2026-01-02 * "buy"
+  Assets:Broker  10 GOOG {100.00 USD}
+  Assets:CN:Bank  -1000.00 USD
+"""
+    )
+    real_ledger = FavaLedger(str(source))
+
+    # Model a booked ledger entry whose units must be interpolated again. Before
+    # the fix, booking.book() treats its Cost as a CostSpec and crashes while
+    # reading the nonexistent ``number_per`` attribute.
+    existing = next(
+        entry
+        for entry in real_ledger.all_entries
+        if type(entry).__name__ == "Transaction"
+    )
+    cost_posting = existing.postings[0]
+    assert isinstance(cost_posting.cost, Cost)
+    incomplete = cost_posting._replace(
+        units=cost_posting.units._replace(number=MISSING)
+    )
+    replacement = existing._replace(postings=[incomplete, *existing.postings[1:]])
+    real_ledger.all_entries = [
+        replacement if entry is existing else entry for entry in real_ledger.all_entries
+    ]
+
+    cs = ChangeSetStore().update(
+        "s1",
+        "transactions",
+        {"transactions": [simple_txn()]},
+        real_ledger,
+    )
     assert cs.errors == []
 
 
@@ -683,6 +771,35 @@ def test_revision_mismatch_blocks_confirmation(ledger):
     store.update("s1", "transactions", {"transactions": [simple_txn()]}, real_ledger)
     with pytest.raises(EntryError, match="重新确认"):
         confirm_change_set(real_ledger, store, "s1", 999, None)
+
+
+def test_confirmation_removes_pending_change_set(ledger):
+    real_ledger, _, _ = ledger
+    store = ChangeSetStore()
+    change_set = store.update(
+        "s1", "transactions", {"transactions": [simple_txn()]}, real_ledger
+    )
+
+    confirm_change_set(real_ledger, store, "s1", change_set.revision, None)
+
+    assert store.get("s1") is None
+
+
+def test_change_set_preview_includes_editable_typed_entries(ledger):
+    real_ledger, _, _ = ledger
+    store = ChangeSetStore()
+    change_set = store.update(
+        "s1", "transactions", {"transactions": [simple_txn()]}, real_ledger
+    )
+
+    preview = change_set.to_dict()
+
+    assert preview["transactions"] == change_set.transactions
+    assert preview["directives"] == []
+    assert preview["transactions"][0]["postings"][0]["units"] == {
+        "number": "50.00",
+        "currency": "CNY",
+    }
 
 
 def test_invalid_lot_reduction_blocks_proposal(ledger):

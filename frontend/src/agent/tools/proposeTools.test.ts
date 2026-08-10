@@ -24,6 +24,8 @@ const CHANGE_SET = {
   revision: 3,
   transaction_count: 2,
   directive_count: 0,
+  transactions: [],
+  directives: [],
   target_file: "2026.beancount",
   preview: "2026-01-02 * \"\" \"lunch\"",
   errors: [],
