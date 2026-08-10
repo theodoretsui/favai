@@ -314,7 +314,7 @@ def test_invalid_account_rejected():
         _valid_account("Assets:Foo Bar")
     with pytest.raises(EntryError, match="账户名无效"):
         _valid_account("Assets:Foo:bar")
-    with pytest.raises(EntryError, match="账户名无效"):
+    with pytest.raises(EntryError, match="账户名不可为空"):
         _valid_account("")
 
 
