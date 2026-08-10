@@ -6,8 +6,8 @@ import {
 import { Button, Card, Form, Input, Space, Table, Tag } from "antd";
 
 import type { Posting, Transaction } from "@/api";
-import { t } from "@/i18n";
 import { AccountCombobox } from "@/components/AccountCombobox";
+import { t } from "@/i18n";
 
 export function ProposalTable({
   transactions,
@@ -18,48 +18,66 @@ export function ProposalTable({
   accounts: string[];
   onChange: (next: Transaction[]) => void;
 }) {
-  function updateTxn(index: number, patch: Partial<Transaction>) {
+  function updateTransaction(index: number, patch: Partial<Transaction>) {
     onChange(
-      transactions.map((txn, itemIndex) =>
-        itemIndex === index ? { ...txn, ...patch } : txn,
+      transactions.map((transaction, itemIndex) =>
+        itemIndex === index ? { ...transaction, ...patch } : transaction,
       ),
     );
   }
 
   function updatePosting(
-    txnIndex: number,
+    transactionIndex: number,
     postingIndex: number,
     patch: Partial<Posting>,
   ) {
-    const txn = transactions[txnIndex];
-    updateTxn(txnIndex, {
-      postings: txn.postings.map((posting, itemIndex) =>
+    const transaction = transactions[transactionIndex];
+    updateTransaction(transactionIndex, {
+      postings: transaction.postings.map((posting, itemIndex) =>
         itemIndex === postingIndex ? { ...posting, ...patch } : posting,
       ),
     });
   }
 
-  function addPosting(txnIndex: number) {
-    const txn = transactions[txnIndex];
-    updateTxn(txnIndex, {
-      postings: [...txn.postings, { account: "", amount: "", currency: "" }],
+  function updateUnits(
+    transactionIndex: number,
+    postingIndex: number,
+    field: "number" | "currency",
+    value: string,
+  ) {
+    const posting = transactions[transactionIndex].postings[postingIndex];
+    updatePosting(transactionIndex, postingIndex, {
+      units: {
+        number: posting.units?.number ?? "",
+        currency: posting.units?.currency ?? "",
+        [field]: value,
+      },
     });
   }
 
-  function removePosting(txnIndex: number, postingIndex: number) {
-    const txn = transactions[txnIndex];
-    updateTxn(txnIndex, {
-      postings: txn.postings.filter((_, index) => index !== postingIndex),
+  function addPosting(transactionIndex: number) {
+    const transaction = transactions[transactionIndex];
+    updateTransaction(transactionIndex, {
+      postings: [...transaction.postings, { account: "" }],
+    });
+  }
+
+  function removePosting(transactionIndex: number, postingIndex: number) {
+    const transaction = transactions[transactionIndex];
+    updateTransaction(transactionIndex, {
+      postings: transaction.postings.filter(
+        (_, index) => index !== postingIndex,
+      ),
     });
   }
 
   return (
     <div className="flex flex-col gap-3">
-      {transactions.map((txn, txnIndex) => {
-        const incomplete = txn.flag === "incomplete";
+      {transactions.map((transaction, transactionIndex) => {
+        const incomplete = transaction.flag === "incomplete";
         return (
           <Card
-            key={txnIndex}
+            key={transactionIndex}
             size="small"
             className={incomplete ? "favai-proposal-incomplete" : undefined}
             extra={
@@ -76,132 +94,150 @@ export function ProposalTable({
                   title={t("proposal.transaction.remove")}
                   onClick={() =>
                     onChange(
-                      transactions.filter((_, index) => index !== txnIndex),
+                      transactions.filter(
+                        (_, index) => index !== transactionIndex,
+                      ),
                     )
                   }
                 />
               </Space>
             }
           >
-          <div className="grid grid-cols-1 gap-x-2 md:grid-cols-12">
-            <Form.Item className="md:col-span-3" label={t("proposal.date")}>
-              <Input
-                type="date"
-                value={txn.date}
-                onChange={(event) =>
-                  updateTxn(txnIndex, { date: event.target.value })
-                }
-              />
-            </Form.Item>
-            <Form.Item className="md:col-span-3" label={t("proposal.payee")}>
-              <Input
-                value={txn.payee ?? ""}
-                onChange={(event) =>
-                  updateTxn(txnIndex, { payee: event.target.value })
-                }
-              />
-            </Form.Item>
-            <Form.Item
-              className="md:col-span-3"
-              label={t("proposal.narration")}
-            >
-              <Input
-                value={txn.narration}
-                onChange={(event) =>
-                  updateTxn(txnIndex, { narration: event.target.value })
-                }
-              />
-            </Form.Item>
-            <Form.Item className="md:col-span-3" label={t("proposal.tags")}>
-              <Input
-                key={(txn.tags ?? []).join(",")}
-                defaultValue={(txn.tags ?? []).map((tag) => `#${tag}`).join(" ")}
-                placeholder={t("proposal.tags.placeholder")}
-                onBlur={(event) =>
-                  updateTxn(txnIndex, {
-                    tags: event.target.value
-                      .split(/[,\s]+/)
-                      .map((tag) => tag.trim().replace(/^#/, ""))
-                      .filter(Boolean),
-                  })
-                }
-              />
-            </Form.Item>
-          </div>
+            <div className="grid grid-cols-1 gap-x-2 md:grid-cols-12">
+              <Form.Item className="md:col-span-3" label={t("proposal.date")}>
+                <Input
+                  type="date"
+                  value={transaction.date}
+                  onChange={(event) =>
+                    updateTransaction(transactionIndex, {
+                      date: event.target.value,
+                    })
+                  }
+                />
+              </Form.Item>
+              <Form.Item className="md:col-span-3" label={t("proposal.payee")}>
+                <Input
+                  value={transaction.payee ?? ""}
+                  onChange={(event) =>
+                    updateTransaction(transactionIndex, {
+                      payee: event.target.value,
+                    })
+                  }
+                />
+              </Form.Item>
+              <Form.Item
+                className="md:col-span-3"
+                label={t("proposal.narration")}
+              >
+                <Input
+                  value={transaction.narration}
+                  onChange={(event) =>
+                    updateTransaction(transactionIndex, {
+                      narration: event.target.value,
+                    })
+                  }
+                />
+              </Form.Item>
+              <Form.Item className="md:col-span-3" label={t("proposal.tags")}>
+                <Input
+                  key={(transaction.tags ?? []).join(",")}
+                  defaultValue={(transaction.tags ?? [])
+                    .map((tag) => `#${tag}`)
+                    .join(" ")}
+                  placeholder={t("proposal.tags.placeholder")}
+                  onBlur={(event) =>
+                    updateTransaction(transactionIndex, {
+                      tags: event.target.value
+                        .split(/[,\s]+/)
+                        .map((tag) => tag.trim().replace(/^#/, ""))
+                        .filter(Boolean),
+                    })
+                  }
+                />
+              </Form.Item>
+            </div>
 
-          <Table<Posting>
-            size="small"
-            pagination={false}
-            rowKey={(_, postingIndex) => String(postingIndex)}
-            dataSource={txn.postings}
-            scroll={{ x: 560 }}
-            columns={[
-              {
-                title: t("proposal.account"),
-                dataIndex: "account",
-                render: (_, posting, postingIndex) => (
-                  <AccountCombobox
-                    value={posting.account}
-                    accounts={accounts}
-                    onChange={(account) =>
-                      updatePosting(txnIndex, postingIndex, { account })
-                    }
-                  />
-                ),
-              },
-              {
-                title: t("proposal.amount"),
-                dataIndex: "amount",
-                width: 130,
-                render: (_, posting, postingIndex) => (
-                  <Input
-                    value={posting.amount ?? ""}
-                    onChange={(event) =>
-                      updatePosting(txnIndex, postingIndex, {
-                        amount: event.target.value,
-                      })
-                    }
-                  />
-                ),
-              },
-              {
-                title: t("proposal.currency"),
-                dataIndex: "currency",
-                width: 110,
-                render: (_, posting, postingIndex) => (
-                  <Input
-                    value={posting.currency ?? ""}
-                    onChange={(event) =>
-                      updatePosting(txnIndex, postingIndex, {
-                        currency: event.target.value,
-                      })
-                    }
-                  />
-                ),
-              },
-              {
-                key: "actions",
-                width: 44,
-                render: (_, _posting, postingIndex) => (
-                  <Button
-                    type="text"
-                    danger
-                    icon={<DeleteOutlined />}
-                    title={t("proposal.posting.remove")}
-                    onClick={() => removePosting(txnIndex, postingIndex)}
-                  />
-                ),
-              },
-            ]}
-          />
-          <Space className="mt-3">
-            <Button
-              icon={<PlusOutlined />}
-              onClick={() => addPosting(txnIndex)}
-            >
-              {t("proposal.posting.add")}
-            </Button>
-          </Space>
+            <Table<Posting>
+              size="small"
+              pagination={false}
+              rowKey={(_, postingIndex) => String(postingIndex)}
+              dataSource={transaction.postings}
+              scroll={{ x: 560 }}
+              columns={[
+                {
+                  title: t("proposal.account"),
+                  dataIndex: "account",
+                  render: (_, posting, postingIndex) => (
+                    <AccountCombobox
+                      value={posting.account}
+                      accounts={accounts}
+                      onChange={(account) =>
+                        updatePosting(transactionIndex, postingIndex, {
+                          account,
+                        })
+                      }
+                    />
+                  ),
+                },
+                {
+                  title: t("proposal.amount"),
+                  width: 130,
+                  render: (_, posting, postingIndex) => (
+                    <Input
+                      value={posting.units?.number ?? ""}
+                      onChange={(event) =>
+                        updateUnits(
+                          transactionIndex,
+                          postingIndex,
+                          "number",
+                          event.target.value,
+                        )
+                      }
+                    />
+                  ),
+                },
+                {
+                  title: t("proposal.currency"),
+                  width: 110,
+                  render: (_, posting, postingIndex) => (
+                    <Input
+                      value={posting.units?.currency ?? ""}
+                      onChange={(event) =>
+                        updateUnits(
+                          transactionIndex,
+                          postingIndex,
+                          "currency",
+                          event.target.value,
+                        )
+                      }
+                    />
+                  ),
+                },
+                {
+                  key: "actions",
+                  width: 44,
+                  render: (_, _posting, postingIndex) => (
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      title={t("proposal.posting.remove")}
+                      onClick={() =>
+                        removePosting(transactionIndex, postingIndex)
+                      }
+                    />
+                  ),
+                },
+              ]}
+            />
+            <Space className="mt-3">
+              <Button
+                icon={<PlusOutlined />}
+                onClick={() => addPosting(transactionIndex)}
+              >
+                {t("proposal.posting.add")}
+              </Button>
+            </Space>
           </Card>
         );
       })}

@@ -9,6 +9,7 @@ include "./sub_file.beancount"
 2026-01-01 open Assets:CN:Alipay
 2026-01-01 open Assets:CN:WeChat
 2026-01-01 open Assets:CN:Bank:Checking
+2025-01-01 open Assets:CN:Bank:中国银行
 
 * Liabilities
 2026-01-01 open Liabilities:CreditCard:CN
@@ -72,3 +73,25 @@ include "./sub_file.beancount"
 2026-07-22 * "支付宝" "爱心捐赠"
   Expenses:Shopping                            66.80 CNY
   Assets:CN:Alipay
+
+2024-08-08 open Assets:Brokerage:NortheastSecurities CNY,HKD
+
+2026-08-04 commodity HK01888
+
+2026-08-05 open Assets:Northeast HK01888,HKD
+
+2026-08-06 open Expenses:Commissions HKD
+
+2026-08-07 open Liabilities:Broker:Settlement HKD
+
+
+2026-08-08 price HK01888 38.36 HKD
+
+2026-08-07 * "" "买入 01888.HK（HK01888）500 股 @ 38.52 HKD，手续费 24.32，待交割"
+  Assets:Northeast  500 HK01888 {38.52 HKD, 2026-08-07}
+  Expenses:Commissions  24.32 HKD
+  Liabilities:Broker:Settlement  -19284.32 HKD
+
+2026-08-09 * "" "买入 HK01888 compound"
+  Assets:Northeast  100 HK01888 {38.52 # 24.32 HKD}
+  Assets:CN:Bank:Checking  -3876.32 HKD

@@ -36,6 +36,9 @@ export function buildModels(config: Config): BuiltModels {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: config.context_window,
     maxTokens: config.max_tokens,
+    // pi-ai's API implementations read model.headers, not provider.headers.
+    // The backend uses this header to load the matching provider config.
+    headers: { "X-Favai-Provider": config.provider },
   };
 
   const models = createModels();

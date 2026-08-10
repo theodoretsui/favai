@@ -59,6 +59,12 @@ const zhCN = {
 
   "proposal.title": "审核写入",
   "proposal.empty": "暂无提案，等待 LLM 提取结果。",
+  "proposal.change_set.revision": "版本 {revision}",
+  "proposal.change_set.summary":
+    "待写入 {transactions} 笔交易、{directives} 条指令；确认将写入完整变更集，版本变化后需重新确认。",
+  "propose.transactions.done": "已提交 {count} 笔交易提案，等待用户确认或反馈。",
+  "propose.directives.done": "已提交 {count} 条指令提案，等待用户确认或反馈。",
+  "propose.preview.revision": "变更集版本：{revision}",
   "proposal.new.available": "LLM 给出了新提案",
   "proposal.new.apply": "覆盖当前修改",
   "proposal.new.keep": "保留我的修改",
@@ -75,6 +81,9 @@ const zhCN = {
   "proposal.transaction.remove": "删除此交易",
   "proposal.flag.incomplete": "待确认",
   "proposal.dirty.badge": "已手动修改",
+  "proposal.edit.unsaved": "修改尚未校验",
+  "proposal.edit.validate": "校验修改",
+  "proposal.edit.validated": "修改已校验，请确认最新版本后写入",
 
   "account.search.placeholder": "搜索或输入新账户…",
   "account.empty": "没有匹配的账户",
@@ -147,6 +156,26 @@ const zhCN = {
   "import.validation.tagInvalid": "第 {index} 笔交易的标签格式无效：{tag}",
   "import.validation.multipleUnspecified": "第 {index} 笔交易有多条分录缺少金额",
   "import.validation.unbalanced": "第 {index} 笔交易金额不平衡（{currency} 差额 {difference}）",
+
+  "approval.title": "需要授权",
+  "approval.operation": "工具 {tool} 请求执行一个写入操作",
+  "approval.args": "操作参数（参数一旦更改，授权即失效）",
+  "approval.expires": "{seconds} 秒后自动拒绝",
+  "approval.approve": "批准",
+  "approval.deny": "拒绝",
+  "approval.effect.write": "此操作将修改账本文件，且仅执行本次批准的内容。",
+  "approval.effect.destructive": "此操作不可逆，请仔细确认。",
+  "approval.effect.create_file":
+    "将在账本目录下创建新文件，并在主账本文件末尾追加 include 语句。文件已存在时不会覆盖。",
+  "approval.field.path": "文件路径",
+  "approval.field.initial_content": "文件内容",
+  "approval.field.include_in_main": "加入主账本",
+  "approval.yes": "是",
+  "approval.no": "否",
+  "approval.empty": "（空）",
+  "create_file.done.created": "已创建 {path} 并写入 include 到 {include}。",
+  "create_file.done.already": "{path} 已存在且内容一致，include 已在 {include} 中。",
+  "create_file.error.no_approval": "该写入操作未获得批准，无法执行。",
 } as const;
 
 export type I18nKey = keyof typeof zhCN;
@@ -206,6 +235,14 @@ const en: Record<I18nKey, string> = {
 
   "proposal.title": "Review and write",
   "proposal.empty": "No proposal yet — waiting for the LLM to extract transactions.",
+  "proposal.change_set.revision": "Revision {revision}",
+  "proposal.change_set.summary":
+    "{transactions} transaction(s) and {directives} directive(s) pending; confirming writes the whole change set, and a new revision requires re-confirmation.",
+  "propose.transactions.done":
+    "Submitted {count} transaction proposal(s) for review — the ledger has not been written.",
+  "propose.directives.done":
+    "Submitted {count} directive proposal(s) for review — the ledger has not been written.",
+  "propose.preview.revision": "Change-set revision: {revision}",
   "proposal.new.available": "The LLM produced a new proposal",
   "proposal.new.apply": "Overwrite my edits",
   "proposal.new.keep": "Keep my edits",
@@ -222,6 +259,10 @@ const en: Record<I18nKey, string> = {
   "proposal.transaction.remove": "Delete transaction",
   "proposal.flag.incomplete": "Needs review",
   "proposal.dirty.badge": "Edited",
+  "proposal.edit.unsaved": "Edits not validated",
+  "proposal.edit.validate": "Validate changes",
+  "proposal.edit.validated":
+    "Changes validated. Review the latest revision before writing.",
 
   "account.search.placeholder": "Search or type a new account…",
   "account.empty": "No matching account",
@@ -294,6 +335,26 @@ const en: Record<I18nKey, string> = {
   "import.validation.tagInvalid": "Transaction {index} has an invalid tag: {tag}",
   "import.validation.multipleUnspecified": "Transaction {index} has multiple postings without amounts",
   "import.validation.unbalanced": "Transaction {index} is unbalanced ({currency} difference: {difference})",
+
+  "approval.title": "Approval required",
+  "approval.operation": "Tool {tool} requests a write operation",
+  "approval.args": "Operation arguments (changing any argument invalidates the approval)",
+  "approval.expires": "Auto-denied in {seconds}s",
+  "approval.approve": "Approve",
+  "approval.deny": "Deny",
+  "approval.effect.write": "This operation mutates the ledger files, and only the exact reviewed content runs.",
+  "approval.effect.destructive": "This operation is irreversible — please confirm carefully.",
+  "approval.effect.create_file":
+    "Creates a new file under the ledger directory and appends an include statement to the main ledger file. Existing files are never overwritten.",
+  "approval.field.path": "File path",
+  "approval.field.initial_content": "File content",
+  "approval.field.include_in_main": "Add to main ledger",
+  "approval.yes": "Yes",
+  "approval.no": "No",
+  "approval.empty": "(empty)",
+  "create_file.done.created": "Created {path} and added include to {include}.",
+  "create_file.done.already": "{path} already exists with identical content; include is already in {include}.",
+  "create_file.error.no_approval": "This write was not approved and cannot run.",
 };
 
 const dict: Record<I18nKey, string> =

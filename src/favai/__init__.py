@@ -10,6 +10,7 @@ from typing import Any
 from fava.ext import FavaExtensionBase, extension_endpoint
 from flask import request
 
+from favai.capabilities import CapabilityStore
 from favai.config import (
     ConfigError,
     ProviderConfig,
@@ -23,7 +24,13 @@ from favai.config import (
     save_bookkeeping_habits,
     save_config,
 )
-from favai.entries import source_file_options, to_fava_entries, write_entries
+from favai.entries import (
+    EntryError,
+    source_file_options,
+    to_fava_entries,
+    write_entries,
+)
+from favai.file_creation import create_and_include_gated
 from favai.history import (
     HistoryError,
     archive_session,
@@ -35,6 +42,7 @@ from favai.history import (
     save_session,
 )
 from favai.ingest import ingest_uploads
+from favai.proposals import ChangeSetStore, confirm_change_set
 from favai.providers import list_provider_models
 from favai.proxy import ProxyError, forward_llm
 
@@ -62,6 +70,12 @@ class FavaAI(FavaExtensionBase):
 
     def __init__(self, ledger: Any, config: str | None = None) -> None:
         super().__init__(ledger, config)
+        # Single-use capability tokens granted after user approval of gated
+        # operations; in-memory only, never persisted.
+        self._capabilities = CapabilityStore()
+        # Pending typed proposal change sets per conversation; in-memory only,
+        # never persisted into session history.
+        self._change_sets = ChangeSetStore()
         # Seed .favai/config.json from the beancount file's extension
         # declaration only once.  Once present, config.json is authoritative:
         # settings saved through the UI must survive Fava reloads.
@@ -100,6 +114,64 @@ class FavaAI(FavaExtensionBase):
     def data_dir(self) -> Path:
         """Directory holding favai's config files."""
         return data_dir_for(self.ledger.beancount_file_path)
+
+    @property
+    def capabilities(self) -> CapabilityStore:
+        """Capability store bound to this ledger instance."""
+        return self._capabilities
+
+    @property
+    def ledger_id(self) -> str:
+        """Stable identity used to bind capabilities to this ledger."""
+        return str(self.ledger.beancount_file_path)
+
+    # ------------------------------------------------------------------
+    # capability tokens (human-in-the-loop authorization)
+    # ------------------------------------------------------------------
+
+    @extension_endpoint("capability_mint", ["POST"])
+    @api_response
+    def api_capability_mint(self) -> dict[str, Any]:
+        """Mint a single-use capability after the user approved an operation.
+
+        The operation object (the tool's validated arguments) is hashed by the
+        backend, so the returned token only authorizes that exact operation on
+        this ledger within a short TTL.  The consuming write endpoint must
+        submit the same operation object and the token, and the token cannot
+        be reused.
+        """
+        payload = request.get_json(force=True)
+        grant = self._capabilities.mint(
+            operation=payload.get("operation"),
+            ledger_id=self.ledger_id,
+            session_id=str(payload.get("session_id") or ""),
+            risk=str(payload.get("risk") or "write"),
+        )
+        return grant
+
+    # ------------------------------------------------------------------
+    # gated ledger-file creation (create-and-include)
+    # ------------------------------------------------------------------
+
+    @extension_endpoint("ledger_file_create", ["POST"])
+    @api_response
+    def api_ledger_file_create(self) -> dict[str, Any]:
+        """Create a new .beancount source file and include it in the ledger.
+
+        Requires a valid single-use capability minted after explicit user
+        approval of the exact operation.  Path, payload, checksum, and
+        duplicate-include constraints are all revalidated here, so bypassing
+        the frontend never grants access.
+        """
+        payload = request.get_json(force=True)
+        return create_and_include_gated(
+            self.ledger,
+            self._capabilities,
+            self.ledger_id,
+            session_id=str(payload.get("session_id") or ""),
+            token=str(payload.get("capability") or ""),
+            operation=payload.get("operation") or {},
+        )
 
     # ------------------------------------------------------------------
     # status / config
@@ -330,3 +402,57 @@ class FavaAI(FavaExtensionBase):
         if session_id:
             mark_confirmed(self.data_dir, session_id, transactions=transactions)
         return {"inserted": len(entries), "write_path": write_path}
+
+    # ------------------------------------------------------------------
+    # typed change-set proposals (propose_transactions v2 / propose_directives)
+    # ------------------------------------------------------------------
+
+    @extension_endpoint("proposal_preview", ["GET", "POST"])
+    @api_response
+    def api_proposal_preview(self) -> dict[str, Any]:
+        """Validate a typed batch and update the pending change set.
+
+        A retry replaces its own latest batch; the change set is revalidated
+        as a whole (directives + transactions) in ledger context.  Validation
+        failures are returned as errors so the agent can repair the batch.
+        GET with a session id returns the stored change set for restore.
+        """
+        if request.method == "GET":
+            session_id = request.args.get("session_id", "")
+            change_set = self._change_sets.get(str(session_id))
+            if change_set is None:
+                msg = "没有待确认的提案，请让助手先提交交易或指令"
+                raise EntryError(msg)
+            return change_set.to_dict()
+        payload = request.get_json(force=True)
+        session_id = str(payload.get("session_id") or "")
+        tool = str(payload.get("tool") or "")
+        batch = payload.get("batch") or {}
+        change_set = self._change_sets.update(
+            session_id,
+            tool,
+            batch,
+            self.ledger,
+            target_file=str(payload.get("write_path") or "") or None,
+        )
+        return change_set.to_dict()
+
+    @extension_endpoint("proposal_confirm", ["POST"])
+    @api_response
+    def api_proposal_confirm(self) -> dict[str, Any]:
+        """Write the reviewed change set, bound to its exact revision."""
+        payload = request.get_json(force=True)
+        session_id = str(payload.get("session_id") or "")
+        revision = int(payload.get("revision") or -1)
+        write_path = str(payload.get("write_path") or "").strip() or None
+        change_set = self._change_sets.get(session_id)
+        result = confirm_change_set(
+            self.ledger, self._change_sets, session_id, revision, write_path
+        )
+        if session_id and change_set is not None:
+            mark_confirmed(
+                self.data_dir,
+                session_id,
+                transactions=change_set.transactions,
+            )
+        return result

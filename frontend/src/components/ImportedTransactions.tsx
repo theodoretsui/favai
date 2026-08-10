@@ -1,8 +1,16 @@
 import { CheckCircleOutlined } from "@ant-design/icons";
 import { Card, Space, Table, Tag, Typography } from "antd";
 
-import type { Transaction } from "@/api";
+import type { Posting, Transaction } from "@/api";
 import { t } from "@/i18n";
+
+export function postingAmount(posting: Posting): string {
+  return posting.units?.number || "—";
+}
+
+export function postingCurrency(posting: Posting): string {
+  return posting.units?.currency || "—";
+}
 
 export function ImportedTransactions({
   transactions,
@@ -56,18 +64,16 @@ export function ImportedTransactions({
                 },
                 {
                   title: t("proposal.amount"),
-                  dataIndex: "amount",
                   align: "right",
                   width: 130,
                   className: "font-mono text-xs",
-                  render: (value: string) => value || "—",
+                  render: (_, posting) => postingAmount(posting),
                 },
                 {
                   title: t("proposal.currency"),
-                  dataIndex: "currency",
                   width: 100,
                   className: "font-mono text-xs",
-                  render: (value: string) => value || "—",
+                  render: (_, posting) => postingCurrency(posting),
                 },
               ]}
             />

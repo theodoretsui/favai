@@ -31,10 +31,33 @@ export interface BookkeepingHabits {
   bookkeeping_habits: string;
 }
 
+export interface PostingUnits {
+  number: string;
+  currency: string;
+}
+
+export interface PostingCost {
+  kind: "per_unit" | "total" | "compound";
+  number?: string;
+  per_number?: string;
+  total_number?: string;
+  currency: string;
+  date?: string;
+}
+
+export interface PostingPrice {
+  kind: "per_unit" | "total";
+  number: string;
+  currency: string;
+}
+
 export interface Posting {
   account: string;
-  amount?: string;
-  currency?: string;
+  flag?: string;
+  units?: PostingUnits;
+  cost?: PostingCost;
+  price?: PostingPrice;
+  metadata?: Record<string, string | number | boolean>;
 }
 
 export interface Transaction {
@@ -45,11 +68,47 @@ export interface Transaction {
   postings: Posting[];
   tags?: string[];
   links?: string[];
+  metadata?: Record<string, string | number | boolean>;
+}
+
+export interface Directive {
+  kind: "open" | "commodity" | "price" | "balance" | "note" | "event";
+  date: string;
+  account?: string;
+  currency?: string;
+  currencies?: string[];
+  booking?: string;
+  commodity?: string;
+  amount?: { number: string; currency: string };
+  comment?: string;
+  type?: string;
+  description?: string;
+  metadata?: Record<string, string | number | boolean>;
+}
+
+export interface ChangeSetPreview {
+  id: string;
+  revision: number;
+  transaction_count: number;
+  directive_count: number;
+  transactions: Transaction[];
+  directives: Directive[];
+  target_file: string | null;
+  preview: string;
+  errors: string[];
+  warnings: string[];
 }
 
 export interface ImportConfirmResult {
   inserted: number;
   write_path: string | null;
+}
+
+export interface CapabilityGrant {
+  capability: string;
+  operation_hash: string;
+  risk: string;
+  expires_at: number;
 }
 
 export interface SessionSummary {
@@ -167,6 +226,46 @@ export const api = {
       session_id: sessionId,
       write_path: writePath,
     }),
+  proposalPreview: (
+    tool: "transactions" | "directives",
+    batch: { transactions?: Transaction[]; directives?: Directive[] },
+    sessionId?: string,
+    writePath?: string,
+  ) =>
+    postJson<ChangeSetPreview>("proposal_preview", {
+      session_id: sessionId,
+      tool,
+      batch,
+      write_path: writePath,
+    }),
+  getProposal: (sessionId?: string) =>
+    request<ChangeSetPreview>(
+      `proposal_preview?session_id=${encodeURIComponent(sessionId ?? "")}`,
+    ),
+  proposalConfirm: (sessionId: string, revision: number, writePath?: string) =>
+    postJson<ImportConfirmResult>("proposal_confirm", {
+      session_id: sessionId,
+      revision,
+      write_path: writePath,
+    }),
+  createLedgerFile: (payload: {
+    capability: string;
+    operation: {
+      path: string;
+      initial_content: string;
+      include_in_main: boolean;
+    };
+    sessionId?: string;
+  }) =>
+    postJson<{
+      created_path: string;
+      include_path: string;
+      already_completed: boolean;
+    }>("ledger_file_create", {
+      capability: payload.capability,
+      operation: payload.operation,
+      session_id: payload.sessionId,
+    }),
   listSessions: (offset = 0, limit = 30) =>
     request<SessionListResult>(`sessions?limit=${limit}&offset=${offset}`),
   createSession: (config: Config) =>
@@ -183,6 +282,11 @@ export const api = {
     postJson<Session>("session_save", state),
   deleteSession: (sessionId: string) =>
     postJson<{ deleted: boolean }>("session_delete", {
+      session_id: sessionId,
+    }),
+  mintCapability: (operation: unknown, sessionId?: string) =>
+    postJson<CapabilityGrant>("capability_mint", {
+      operation,
       session_id: sessionId,
     }),
 };
