@@ -30,6 +30,11 @@ export interface ApprovalWiring extends ApprovalGateContext {
   manager: ApprovalManager;
 }
 
+/** Enable reasoning summaries by default for models that advertise support. */
+function initialThinkingLevel(model: { reasoning: boolean }) {
+  return model.reasoning ? "medium" as const : "off" as const;
+}
+
 /**
  * Attach the approval gate to a tool list.
  *
@@ -82,6 +87,7 @@ export function createImportAgent(
     initialState: {
       systemPrompt: "", // The bill-materials prompt is sent as the first user message.
       model,
+      thinkingLevel: initialThinkingLevel(model),
       tools: gated.tools,
     },
     streamFn,
@@ -113,6 +119,7 @@ export function createChatAgent(
         bookkeepingHabits,
       ),
       model,
+      thinkingLevel: initialThinkingLevel(model),
       tools: gated.tools,
     },
     streamFn,
@@ -163,6 +170,7 @@ export function createUnifiedAgent(
         bookkeepingHabits,
       ),
       model,
+      thinkingLevel: initialThinkingLevel(model),
       tools: gated.tools,
     },
     streamFn,

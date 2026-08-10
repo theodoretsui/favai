@@ -140,6 +140,18 @@ def test_validate_errors(tmp_path, kwargs, match):
         save_config(tmp_path, config)
 
 
+def test_openai_responses_api_is_supported(tmp_path):
+    config = ProviderConfig(
+        api="openai-responses",
+        base_url="https://api.openai.com/v1",
+        model="gpt-5",
+    )
+
+    save_config(tmp_path, config)
+
+    assert load_config(tmp_path) == config
+
+
 def test_public_dict_masks_literal_key():
     config = ProviderConfig(api_key="sk-secret-123")
     public = config.to_public_dict()
