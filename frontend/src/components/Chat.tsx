@@ -72,7 +72,13 @@ function ToolSteps({ invocations }: { invocations: ToolInvocation[] }) {
   );
 }
 
-function MessageContent({ message }: { message: ChatMessage }) {
+function MessageContent({
+  message,
+  isStreaming = false,
+}: {
+  message: ChatMessage;
+  isStreaming?: boolean;
+}) {
   const orderedParts = message.parts ?? [];
   const hasTextPart = orderedParts.some((part) => part.type === "text");
   const hasToolPart = orderedParts.some((part) => part.type === "tool-invocation");
@@ -107,17 +113,24 @@ function MessageContent({ message }: { message: ChatMessage }) {
       ))}
       {orderedParts.map((part, index) => {
         if (part.type === "reasoning") {
+          const reasoning = part.reasoning.trim();
           return (
             <ThoughtChain
               key={`reasoning-${index}`}
               items={[{
                 key: String(index),
-                title: t("chat.reasoning"),
+                title: reasoning
+                  ? t("chat.reasoning")
+                  : isStreaming
+                    ? t("chat.thinking")
+                    : t("chat.reasoning.completed"),
                 icon: <RobotOutlined />,
-                collapsible: true,
-                content: (
-                  <div className="whitespace-pre-wrap text-xs">{part.reasoning}</div>
-                ),
+                status: isStreaming ? "loading" : "success",
+                blink: isStreaming,
+                collapsible: Boolean(reasoning),
+                content: reasoning ? (
+                  <div className="whitespace-pre-wrap text-xs">{reasoning}</div>
+                ) : undefined,
               }]}
             />
           );
@@ -304,7 +317,12 @@ export function Chat({
                 <span>{t("chat.processing")}</span>
               </Flex>
             ),
-            contentRender: (message: ChatMessage) => <MessageContent message={message} />,
+            contentRender: (message: ChatMessage) => (
+              <MessageContent
+                message={message}
+                isStreaming={isGenerating && message === messages.at(-1)}
+              />
+            ),
           },
         }}
       />

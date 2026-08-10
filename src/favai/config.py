@@ -12,7 +12,11 @@ from pathlib import Path
 from typing import Any
 
 #: pi ``api`` values we support for custom providers.
-SUPPORTED_APIS = ("openai-completions", "anthropic-messages")
+SUPPORTED_APIS = (
+    "openai-completions",
+    "openai-responses",
+    "anthropic-messages",
+)
 
 DEFAULT_CONTEXT_WINDOW = 128_000
 DEFAULT_MAX_TOKENS = 16_384

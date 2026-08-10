@@ -265,6 +265,10 @@ export function SettingsForm({
           onChange={(api: ApiKind) => patch({ api })}
           options={[
             { label: t("settings.api.openai"), value: "openai-completions" },
+            {
+              label: t("settings.api.openai_responses"),
+              value: "openai-responses",
+            },
             { label: t("settings.api.anthropic"), value: "anthropic-messages" },
           ]}
         />

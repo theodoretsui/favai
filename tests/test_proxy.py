@@ -102,6 +102,22 @@ def test_openai_empty_key_omits_authorization_header():
     assert "Authorization" not in headers
 
 
+def test_openai_responses_auth_header(monkeypatch):
+    monkeypatch.setenv("KEY", "real-key")
+    config = ProviderConfig(
+        api="openai-responses",
+        base_url="https://api.openai.com/v1",
+        model="gpt-5",
+        api_key="$KEY",
+    )
+
+    headers = _build_upstream_headers(
+        "/responses", {"content-type": "application/json"}, config
+    )
+
+    assert headers["Authorization"] == "Bearer real-key"
+
+
 def test_internal_provider_routing_headers_are_not_forwarded(monkeypatch):
     monkeypatch.setenv("KEY", "key")
     config = ProviderConfig(

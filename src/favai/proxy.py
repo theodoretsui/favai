@@ -1,9 +1,10 @@
 """Stateless LLM request forwarder.
 
 The frontend pi-ai SDK (running in the browser) sends LLM requests to the
-favai ``llm_proxy`` endpoint with the upstream path (e.g. ``/v1/chat/completions``
-or ``/v1/messages``) in the ``X-Favai-Upstream`` header.  This module forwards
-the request to the user-configured provider, injecting the real API key.
+favai ``llm_proxy`` endpoint with the upstream path (e.g. ``/v1/responses``,
+``/v1/chat/completions``, or ``/v1/messages``) in the ``X-Favai-Upstream``
+header.  This module forwards the request to the user-configured provider,
+injecting the real API key.
 """
 
 from __future__ import annotations
@@ -79,7 +80,7 @@ def _build_upstream_headers(
 
     api_key = _resolve_key(config.api_key)
 
-    if config.api == "openai-completions" and api_key:
+    if config.api in {"openai-completions", "openai-responses"} and api_key:
         result["Authorization"] = f"Bearer {api_key}"
     elif config.api == "anthropic-messages":
         if api_key:
@@ -101,7 +102,7 @@ def forward_llm(
 
     Args:
         config: The user's LLM provider configuration.
-        upstream_path: The upstream path (e.g. ``/v1/chat/completions``).
+        upstream_path: The upstream path (e.g. ``/v1/responses``).
         body: The raw request body bytes.
         headers: The raw request headers from the client.
 

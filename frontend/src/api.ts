@@ -12,7 +12,10 @@ export interface Status {
   default_write_path: string;
 }
 
-export type ApiKind = "openai-completions" | "anthropic-messages";
+export type ApiKind =
+  | "openai-completions"
+  | "openai-responses"
+  | "anthropic-messages";
 
 export interface Config {
   provider: string;

@@ -4,6 +4,7 @@
 
 import { createModels, createProvider } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import type { Model } from "@earendil-works/pi-ai";
 import type { Config } from "@/api";
@@ -11,7 +12,9 @@ import { SENTINEL } from "./fetchShim";
 
 export interface BuiltModels {
   models: ReturnType<typeof createModels>;
-  model: Model<"openai-completions" | "anthropic-messages">;
+  model: Model<
+    "openai-completions" | "openai-responses" | "anthropic-messages"
+  >;
 }
 
 export function buildModels(config: Config): BuiltModels {
@@ -22,16 +25,21 @@ export function buildModels(config: Config): BuiltModels {
     ? ["text", "image"]
     : ["text"];
 
-  const model: Model<"openai-completions" | "anthropic-messages"> = {
+  const model: Model<
+    "openai-completions" | "openai-responses" | "anthropic-messages"
+  > = {
     id: config.model,
     name: config.model,
     api: config.api,
     provider: providerId,
     // The sentinel domain has no path — the SDK appends its own suffix
-    // (openai → /chat/completions, anthropic → /v1/messages).
+    // (OpenAI Responses → /responses, Chat Completions → /chat/completions,
+    // Anthropic → /v1/messages).
     // The backend proxy prepends config.base_url to the captured path.
     baseUrl: SENTINEL,
-    reasoning: false,
+    // Responses providers can return reasoning summaries. Mark the model as
+    // reasoning-capable so the agent's thinking level is forwarded to pi-ai.
+    reasoning: config.api === "openai-responses",
     input,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: config.context_window,
@@ -44,7 +52,9 @@ export function buildModels(config: Config): BuiltModels {
   const models = createModels();
   const apiImpl = config.api === "anthropic-messages"
     ? anthropicMessagesApi()
-    : openAICompletionsApi();
+    : config.api === "openai-responses"
+      ? openAIResponsesApi()
+      : openAICompletionsApi();
   models.setProvider(
     createProvider({
       id: providerId,
