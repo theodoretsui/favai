@@ -28,6 +28,11 @@ ocr = [
     "paddleocr>=3.7.0",
     "onnxruntime>=1.26.0",
 ]
+# Backend fallback for office documents/PDFs when browser-side anydoc
+# (WebAssembly) parsing is unavailable.
+anydoc = [
+    "firecrawl-anydoc>=0.1.8",
+]
 
 [project.scripts]
 favai-prefetch-ocr = "favai.cli_prefetch:main"

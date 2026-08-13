@@ -67,7 +67,7 @@ describe("create_ledger_file", () => {
 
   it("cannot execute without an approval manager", async () => {
     const tool = makeCreateLedgerFileTool(undefined, () => "s1");
-    await expect(tool.execute("c-1", PARAMS)).rejects.toThrow(/not approved/);
+    await expect(tool.execute("c-1", PARAMS)).rejects.toThrow(/批准|not approved/);
   });
 
   it("throws when the exact reviewed arguments were not approved", async () => {
@@ -75,7 +75,7 @@ describe("create_ledger_file", () => {
     const tool = makeCreateLedgerFileTool(manager, () => "s1");
     await expect(
       tool.execute("c-2", { ...PARAMS, path: "other.beancount" }),
-    ).rejects.toThrow(/not approved/);
+    ).rejects.toThrow(/批准|not approved/);
     expect(api.createLedgerFile).not.toHaveBeenCalled();
   });
 

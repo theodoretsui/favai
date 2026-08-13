@@ -21,7 +21,10 @@ import { t } from "@/i18n";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { ApprovalPrompt } from "@/components/ApprovalPrompt";
 
-const ACCEPTED_FILES = ".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.pdf";
+const ACCEPTED_FILES =
+  ".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.pdf," +
+  ".doc,.docx,.docm,.ppt,.pps,.pot,.pptx,.pptm,.ppsx,.ppsm," +
+  ".xls,.xlsx,.xlsm,.xlsb,.odt,.ods,.odp,.rtf,.epub";
 
 interface ChatProps {
   messages: ChatMessage[];
