@@ -4,11 +4,12 @@
 
 ## Features
 
-- **Import bills** — paste bank statement text, upload screenshots or PDFs, and let an LLM agent extract transactions and map them to your ledger accounts
+- **Import bills** — paste bank statement text, upload screenshots, PDFs, or office documents (Word, Excel, PowerPoint, RTF, EPUB), and let an LLM agent extract transactions and map them to your ledger accounts
 - **Chat with your ledger** — ask questions in natural language using BQL queries ("What was my food spend this month?")
 - **Multi-turn editing** — give feedback to refine the proposed transactions before writing
 - **Any LLM provider** — OpenAI-compatible or Anthropic-compatible APIs (supports custom endpoints and `$ENV_VAR` API keys)
 - **OCR fallback** — PaddleOCR extracts text from bill images for non-vision models (optional)
+- **Local document parsing** — Word/PPT/Excel/OpenDocument/RTF/EPUB/CSV/PDF files are converted to Markdown **in your browser** by the [anydoc](https://github.com/firecrawl/anydoc) WebAssembly parser, so office documents never leave your machine
 
 ## How it works
 
@@ -20,11 +21,12 @@ Browser (FavaAI.js)
   ├── pi-ai provider → favai llm_proxy → your LLM API
   ├── propose_transactions tool (import) — updates proposal table
   ├── bql_query tool (chat) — queries fava's built-in BQL API
+  ├── anydoc WASM worker — converts office documents/PDFs to Markdown locally
   └── import_confirm → writes entries via fava's existing write path
 
 favai backend (Flask, stateless)
   ├── config (GET/POST) — provider settings
-  ├── ingest (POST) — file/text processing (text/image/PDF)
+  ├── ingest (POST) — file/text processing (text/image/PDF, anydoc fallback)
   ├── llm_proxy (POST) — forwards LLM requests with injected API key
   └── import_confirm (POST) — validates and writes entries to ledger
 ```
@@ -84,6 +86,18 @@ pip install "favai[ocr]"
 # or: uv sync --extra ocr
 ```
 
+### Optional: backend document parsing
+
+Office documents and PDFs are parsed **in the browser** by the bundled anydoc
+WebAssembly parser, so the backend usually never sees them. If you want the
+backend `ingest` endpoint to parse them too (e.g. when browser-side parsing is
+unavailable), install the optional anydoc binding:
+
+```bash
+pip install "favai[anydoc]"
+# or: uv sync --extra anydoc
+```
+
 ## Usage
 
 ### 1. Configure an LLM provider
@@ -109,7 +123,7 @@ and its selected model list then appears in the new-session model selector.
 
 ### 2. Import bills
 
-In the chat interface, paste text or upload files (`.txt`, `.csv`, `.png`, `.jpg`, `.pdf`, etc.) and press Enter. The LLM agent extracts transactions and presents them in an editable table. You can:
+In the chat interface, paste text or upload files (`.txt`, `.md`, `.csv`, `.json`, images, `.pdf`, `.doc/.docx`, `.xls/.xlsx`, `.ppt/.pptx`, `.odt/.ods/.odp`, `.rtf`, `.epub`, …) and press Enter. Office documents and text-layer PDFs are converted to Markdown locally by the anydoc WebAssembly parser before anything is uploaded; images and plain-text files go through the backend pipeline (vision / OCR / text decode) as before. The LLM agent extracts transactions and presents them in an editable table. You can:
 
 - Edit cells directly in the table
 - Send natural-language feedback ("change this one to Dining")

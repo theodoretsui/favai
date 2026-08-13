@@ -132,10 +132,93 @@ def test_pdf_text_extraction():
 
 
 def test_unsupported_extension():
-    result = ingest_uploads([("data.xlsx", b"binary")])
+    result = ingest_uploads([("data.xyz", b"binary")])
     assert any("不支持的文件类型" in w for w in result.warnings)
+
+
+def test_anydoc_format_without_parser_hints():
+    """Known anydoc formats get an actionable hint when the parser is absent."""
+    result = ingest_uploads([("data.xlsx", b"binary")])
+    assert any("favai[anydoc]" in w for w in result.warnings)
+    assert not result.texts
+
+
+def test_anydoc_document_converted(monkeypatch):
+    """With anydoc installed, office documents become Markdown text."""
+    fake = _install_fake_anydoc(monkeypatch)
+    fake.to_markdown_bytes.return_value = "# 报销单\n\n- 海底捞 268 元\n"
+
+    result = ingest_uploads([("bill.docx", b"PK\x03\x04fake")])
+
+    assert len(result.texts) == 1
+    assert "bill.docx" in result.texts[0]
+    assert "海底捞" in result.texts[0]
+    assert not result.warnings
+    fake.format_from_extension.assert_called_once_with(".docx")
+
+
+def test_anydoc_document_failure_warns(monkeypatch):
+    """anydoc conversion failures surface as a per-file warning."""
+    fake = _install_fake_anydoc(monkeypatch)
+    fake.to_markdown_bytes.side_effect = RuntimeError("boom")
+
+    result = ingest_uploads([("bill.xlsx", b"binary")])
+
+    assert not result.texts
+    assert any("解析失败" in w and "bill.xlsx" in w for w in result.warnings)
+
+
+def test_anydoc_csv_becomes_markdown(monkeypatch):
+    """CSV is converted to a Markdown table when anydoc is installed."""
+    fake = _install_fake_anydoc(monkeypatch)
+    fake.to_markdown_bytes.return_value = "| date | amount |\n| --- | --- |\n"
+
+    result = ingest_uploads([("bill.csv", b"date,amount\n")])
+
+    assert len(result.texts) == 1
+    assert "bill.csv" in result.texts[0]
+    fake.format_from_extension.assert_called_once_with(".csv")
+
+
+def test_anydoc_pdf_preferred(monkeypatch):
+    """Text-layer PDFs are extracted by anydoc when installed."""
+    fake = _install_fake_anydoc(monkeypatch)
+    fake.to_markdown_bytes.return_value = "## 银行对账单\n\n2026-07-01 支出 268 元\n"
+
+    result = ingest_uploads([("bank.pdf", b"%PDF-1.4 fake")])
+
+    assert len(result.texts) == 1
+    assert "银行对账单" in result.texts[0]
+    fake.to_markdown_bytes.assert_called_once()
+
+
+def test_anydoc_pdf_scan_falls_back_to_pypdf(monkeypatch):
+    """Image-only PDFs fall back to pypdf and yield the scan warning."""
+    fake = _install_fake_anydoc(monkeypatch)
+    fake.to_markdown_bytes.side_effect = RuntimeError("unsupported")
+
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    result = ingest_uploads([("scan.pdf", buffer.getvalue())])
+
+    assert not result.texts
+    assert any("没有可提取的文本" in w for w in result.warnings)
 
 
 def test_nothing_ingested():
     result = ingest_uploads([])
     assert any("没有可用的账单材料" in w for w in result.warnings)
+
+
+def _install_fake_anydoc(monkeypatch) -> Mock:
+    """Install a fake ``favai.ingest._anydoc`` binding and enable it."""
+    fake = Mock()
+    fake.format_from_extension.return_value = "docx"
+    fake.format_from_bytes.return_value = None
+    monkeypatch.setattr("favai.ingest._HAS_ANYDOC", True)
+    monkeypatch.setattr("favai.ingest._anydoc", fake)
+    return fake

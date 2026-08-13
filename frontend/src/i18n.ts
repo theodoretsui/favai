@@ -7,12 +7,12 @@
 const zhCN = {
   "chat.title": "FavAI",
   "chat.attach": "添加附件",
-  "chat.attach.hint": "支持 .txt / .md / .csv / .json / 图片，可多选",
+  "chat.attach.hint": "支持 .txt / .md / .csv / .json / 图片 / .pdf / Office 文档，可多选",
   "chat.placeholder": "拖拽账单文件到此处，或直接输入消息…",
   "chat.input.placeholder": "输入消息，或粘贴账单文本…",
 
   "import.dropzone.title": "拖拽账单文件到这里，或点击选择",
-  "import.dropzone.hint": "支持 .txt / .md / .csv / .json / 图片 / .pdf，可多选",
+  "import.dropzone.hint": "支持 .txt / .md / .csv / .json / 图片 / .pdf / Word / Excel / PPT / RTF / EPUB，可多选",
   "import.files.selected": "已选择 {count} 个文件",
   "import.files.remove": "移除",
   "import.paste.label": "或直接粘贴账单文本",
@@ -20,6 +20,9 @@ const zhCN = {
   "import.start": "开始导入",
   "import.start.empty": "请先选择文件或粘贴文本",
   "import.not.configured": "尚未配置 LLM API，请点击右上角齿轮图标完成配置。",
+  "import.anydoc.unavailable":
+    "浏览器内文档解析不可用（anydoc WASM 加载失败），已改为直接上传原文件。",
+  "import.anydoc.empty": "文件「{name}」未能解析出内容。",
 
   "unified.import.title": "导入账单",
   "unified.import.desc": "粘贴或上传账单文件，AI 自动提取交易并生成 Beancount 分录",
@@ -185,12 +188,12 @@ export type I18nKey = keyof typeof zhCN;
 const en: Record<I18nKey, string> = {
   "chat.title": "FavAI",
   "chat.attach": "Attach files",
-  "chat.attach.hint": "Supports .txt / .md / .csv / .json / images, multiple files",
+  "chat.attach.hint": "Supports .txt / .md / .csv / .json / images / .pdf / Office docs, multiple files",
   "chat.placeholder": "Drop statement files here, or type a message…",
   "chat.input.placeholder": "Type a message, or paste statement text…",
 
   "import.dropzone.title": "Drag & drop statement files here, or click to browse",
-  "import.dropzone.hint": "Supports .txt / .md / .csv / .json / images / .pdf, multiple files",
+  "import.dropzone.hint": "Supports .txt / .md / .csv / .json / images / .pdf / Word / Excel / PPT / RTF / EPUB, multiple files",
   "import.files.selected": "{count} file(s) selected",
   "import.files.remove": "Remove",
   "import.paste.label": "…or paste statement text",
@@ -198,6 +201,9 @@ const en: Record<I18nKey, string> = {
   "import.start": "Start import",
   "import.start.empty": "Select files or paste text first",
   "import.not.configured": "LLM API is not configured. Click the gear icon to configure.",
+  "import.anydoc.unavailable":
+    "In-browser document parsing is unavailable (anydoc WASM failed to load); files were uploaded as-is.",
+  "import.anydoc.empty": "File \"{name}\" produced no parseable content.",
 
   "unified.import.title": "Import Bill",
   "unified.import.desc": "Paste or upload a bill; AI extracts transactions and generates Beancount entries",

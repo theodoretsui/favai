@@ -42,6 +42,7 @@ import { SessionSidebar } from "@/components/SessionSidebar";
 import { ImportedTransactions } from "@/components/ImportedTransactions";
 import { ProposalTable } from "@/components/ProposalTable";
 import { prepareTransactionsForValidation } from "@/components/proposalEditing";
+import { convertDocuments } from "@/lib/anydoc";
 import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
 
 interface ModelChoice {
@@ -394,11 +395,20 @@ export function UnifiedChat({
         // Import mode: ingest files, build import prompt.
         setIsProcessing(true);
         try {
-          const ingestResult = await api.ingest(
-            files ?? [],
-            "",
-            activeConfig.vision,
-          );
+          // Office documents and PDFs are converted to Markdown locally by the
+          // anydoc WebAssembly parser before upload; images and plain text go
+          // through the backend pipeline (vision / OCR / text decode).
+          const converted = await convertDocuments(files ?? []);
+          for (const warning of converted.warnings) {
+            void message.warning(`${t("warning.title")}: ${warning}`);
+          }
+          // When every file was parsed locally by anydoc there is nothing
+          // left to upload; skip the backend ingest instead of getting a
+          // spurious "no materials" warning.
+          const ingestResult =
+            converted.uploads.length > 0
+              ? await api.ingest(converted.uploads, "", activeConfig.vision)
+              : { texts: [], images: [], warnings: [] };
           for (const warning of ingestResult.warnings) {
             void message.warning(`${t("warning.title")}: ${warning}`);
           }
@@ -415,7 +425,7 @@ export function UnifiedChat({
             UNIFIED_SYSTEM_PROMPT,
             bookkeepingHabits,
           )}\n\n${importContext}`;
-          ingestTexts = ingestResult.texts;
+          ingestTexts = [...converted.texts, ...ingestResult.texts];
 
           images = ingestResult.images;
           if (!activeConfig.vision && images.length > 0) {
